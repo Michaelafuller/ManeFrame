@@ -1,150 +1,190 @@
-# HANDOFF — Iteration 1 (Milestone M1: Scaffold + domain types + seed catalogs)
+# HANDOFF — Iteration 2 (Milestone M2: color math + query parser + search UI)
 
 **Author:** Fable 5 (planner) · **Executor:** Sonnet 5 · **Date:** 2026-07-10
 
 ## Context
 
-ManeFrame is an offline, on-device hair-color simulator (Expo React Native,
-Android-first, zero backend). This is the first code iteration. The repo root
-is `C:\Users\e146796\source\repos\ManeFrame` and currently contains only
-`.claude\` and `docs\`. Read `docs/PROGRESS.md` for the settled architecture
-decisions (D1–D6) before starting.
+Iteration 1 (commit `0bbec82`) is accepted: Expo SDK 57 TS scaffold, domain
+types in `src/catalog/types.ts`, seed catalogs (40 colors / 16 hairstyles) with
+validated loaders, 22 passing tests. Read `docs/PROGRESS.md` for architecture
+decisions D1–D6. This iteration is **pure TypeScript** — still no native
+modules, no prebuild.
 
 ## Scope — do ALL of the following, and NOTHING outside it
 
-### 1. Git + scaffold
+### 1. Housekeeping
 
-- `git init` in the repo root. Author commits as normal (no push — there is no
-  remote).
-- Scaffold an Expo TypeScript app. The root is non-empty (`.claude`, `docs`),
-  so scaffold with `npx create-expo-app@latest` into a temporary sibling
-  directory, then move its contents into the repo root, preserving `.claude/`
-  and `docs/`. Use the **blank TypeScript** template (`--template
-  blank-typescript`) — we do not want expo-router's tab demo app.
-- App name/slug: `maneframe`. Do not run `expo prebuild` and do not install any
-  native-code libraries this iteration (no vision-camera, no skia, no tflite).
-- Ensure `.gitignore` covers node_modules, .expo, android/, ios/, coverage.
+- In `src/catalog/types.ts`, change the three `Array<...>` fields to `(...)[]`
+  syntax to clear the 3 ESLint warnings. No other type changes. After this,
+  `npm run lint` must report **0 errors, 0 warnings**.
 
-### 2. Tooling
+### 2. Color math — `src/color/`
 
-- TypeScript `strict: true`.
-- ESLint with `eslint-config-expo` (flat config if the installed versions
-  support it; otherwise legacy config is fine). `npm run lint` must work.
-- Jest via `jest-expo` preset. `npm test` must work. Add
-  `npm run typecheck` → `tsc --noEmit`.
-- Prettier with default config; don't fight ESLint over it (use
-  eslint-config-prettier if needed).
+All pure functions, no React imports, fully unit-tested.
 
-### 3. Directory structure
+**`src/color/lab.ts`** — colorimetry:
 
-```
-src/
-  catalog/     # data + loaders + validation
-  search/      # (empty this iteration, add .gitkeep)
-  color/       # (empty this iteration, add .gitkeep)
-  segmentation/# (empty this iteration, add .gitkeep)
-  ui/          # (empty this iteration, add .gitkeep)
-```
+- `srgbToLab(rgb: {r,g,b}): {l,a,b}` and `labToSrgb(lab): {r,g,b}` using the
+  standard sRGB → linear → XYZ (D65) → CIELAB pipeline. RGB channels are
+  0–255 integers at the API boundary; clamp out-of-gamut results into 0–255.
+- `labToCss(lab): string` returning a `#rrggbb` hex string (for UI swatches).
 
-Keep the default `App.tsx` mostly as-is; just render the app name and the
-count of loaded colors/hairstyles from the catalog (proves the catalog wires
-into the app).
+**`src/color/depth.ts`** — starting-depth model:
 
-### 4. Domain types — `src/catalog/types.ts`
+- `estimateStartingLevel(labL: number): 1..10` — map hair luminance to the
+  10-level depth scale consistently with the seed data (natural level 1 ≈ L 9,
+  level 10 ≈ L 80; use linear interpolation with clamping, rounding to the
+  nearest level).
+- `depthGroup(level): "very-dark"|"dark"|"medium"|"light"|"very-light"`
+  (1–2, 3–4, 5–6, 7–8, 9–10).
 
-Implement exactly these shapes (they are settled; do not redesign):
+**`src/color/recolor.ts`** — luminance-preserving recolor reference
+implementation (this exact model is settled; implement it, don't redesign):
 
 ```ts
-export interface HairColor {
-  id: string;                       // kebab-case, unique, e.g. "level-6-copper"
-  displayName: string;              // e.g. "Dark Copper Blonde"
-  level: 1|2|3|4|5|6|7|8|9|10;      // depth, 1=black .. 10=lightest blonde
-  family: "natural"|"ash"|"gold"|"copper"|"red"|"violet"|"mahogany"|"fashion";
-  temperature: "cool"|"neutral"|"warm";
-  targetLab: { l: number; a: number; b: number };  // CIELAB, D65
-  opacity: number;                  // 0..1, how strongly it covers
-  highlightRetention: number;       // 0..1, how much original luminance survives
-  minimumRecommendedStartingLevel?: number; // 1..10
+export interface RecolorParams {
+  color: HairColor;
+  intensity: number;          // 0..1 user slider, default 1
 }
+// confidence: per-pixel hair probability 0..1 (from segmentation, later)
+export function recolorPixel(
+  original: { r: number; g: number; b: number },
+  params: RecolorParams,
+  confidence: number
+): { r: number; g: number; b: number };
+```
 
-export interface Hairstyle {
-  id: string;                       // kebab-case, unique
-  name: string;
-  assets: { front: string; leftThreeQuarter?: string; rightThreeQuarter?: string };
-  lengths: Array<"buzzed"|"short"|"chin"|"shoulder"|"medium"|"long">;
-  fringe: Array<"none"|"blunt-bangs"|"wispy-bangs"|"curtain-bangs"|"side-swept">;
-  textures: Array<"straight"|"wavy"|"curly"|"coily">;
-  attributes: string[];             // free-form tags, e.g. "bob", "layered"
+Model:
+1. `origLab = srgbToLab(original)`.
+2. **Chroma**: blend a/b fully toward `color.targetLab` a/b.
+3. **Luminance with lift limiting**: a dye can darken freely but can only
+   *lighten* a limited amount. Compute
+   `maxLift = 12 + 10 * (1 - color.opacity)` (in L units). Target L is
+   `min(color.targetLab.l, origLab.l + maxLift)` when lightening, or
+   `color.targetLab.l` when darkening.
+4. **Highlight retention**: `outL = mix(targetL, origLab.l, color.highlightRetention * 0.5)`
+   — keeps some of the original luminance structure so highlights survive.
+5. Convert back to sRGB, then final blend:
+   `out = mix(original, recolored, color.opacity * confidence * intensity)`.
+
+Export the small helpers (`mix`, the lift computation) so tests can target
+them.
+
+**Tests — `src/color/__tests__/`** (aim ~20+ assertions):
+
+- Round-trip: for a grid of sRGB colors, `labToSrgb(srgbToLab(c))` is within
+  ±2 per channel. Reference points: white → L≈100, black → L≈0,
+  mid-grey (119,119,119) → L≈50±2, a/b≈0 for greys.
+- `estimateStartingLevel`: L 9 → 1, L 80 → 10, L 47 → 6 (matches seed natural
+  shades); clamps below/above.
+- Recolor behavior (use seed catalog shades via `loadColors()`):
+  - Pastel pink (`fashion-pastel-pink`) on a very dark pixel (L≈10) lightens
+    by **at most** the lift limit — output L stays far below the pastel's
+    target L.
+  - Pastel pink on a light-blonde pixel (L≈75) lands near the pastel's target.
+  - Monotonicity: for the same shade, a brighter input pixel yields a
+    brighter output pixel (luminance structure preserved).
+  - `confidence = 0` returns the original pixel exactly; `intensity = 0` too.
+  - Darkening: black dye over blonde reaches the dye's target L (no limit when
+    darkening).
+
+### 3. Query parser + search — `src/search/`
+
+**`src/search/parser.ts`**:
+
+- `parseQuery(text: string): ParsedQuery` where
+
+```ts
+export interface ParsedQuery {
+  lengths: Hairstyle['lengths'];        // matched length terms
+  fringe: Hairstyle['fringe'];          // specific fringe types mentioned
+  requiresFringe: boolean | null;       // true "with bangs", false "without/no bangs", null unsaid
+  textures: Hairstyle['textures'];
+  attributeTerms: string[];             // leftover meaningful tokens (e.g. "bob", "layered")
+  colorFamilies: HairColor['family'][]; // e.g. "red", "copper", "ash"
+  colorTemperature: HairColor['temperature'] | null; // "warm"/"cool"/"neutral"
+  colorLevelHint: 'dark' | 'medium' | 'light' | null; // "dark brown" → dark
 }
 ```
 
-### 5. Seed data
+- Lowercase tokenization; multi-word synonym matching BEFORE single-token
+  matching (so "curtain bangs" matches as a fringe type, not as the attribute
+  "curtain" + generic "bangs").
+- Negation: "without bangs", "no bangs", "no fringe" → `requiresFringe:false`.
+  "with bangs", "bangs", "fringe" (unqualified) → `requiresFringe:true`.
+- Synonym seeds (extend sensibly): bangs/fringe; shoulder/shoulder-length/
+  collarbone/lob; chin/bob-length; long/waist; short/cropped/pixie-length;
+  wavy/waves/beachy; curly/curls; coily/kinky/afro-textured;
+  straight/sleek; warm/golden; cool/ashy/icy; red/ginger/auburn;
+  copper/orange; blonde→light hint; brunette/brown→medium-or-dark hint;
+  black→dark hint.
+- Stop words ("hair", "with", "and", "a", "the", …) dropped; remaining
+  unrecognized tokens become `attributeTerms`.
 
-- `src/catalog/data/colors.json` — **40 shades**: the 10 natural levels, plus
-  ash/gold/copper/red/violet/mahogany variants across sensible levels, plus
-  ~6 fashion shades (pastel pink, silver, blue-black, etc.). Lab values must
-  be *plausible*: L should rise with level (level 1 ≈ L 8–15, level 10 ≈ L
-  75–90); ash shades slightly negative/low a,b; copper/gold positive b; red
-  positive a. Fashion shades may break the level-L correlation but stay in
-  gamut (L 0–100, a/b within ±60). `minimumRecommendedStartingLevel` on shades
-  that only read on pre-lightened hair (pastels, silver).
-- `src/catalog/data/hairstyles.json` — **16 styles** with honest metadata
-  covering the length/fringe/texture space (pixie, buzz, bob, lob, shoulder
-  layers, long straight, long waves, curly shag, coily afro, curtain-bang
-  midi, blunt-bang bob, side-swept lob, etc.). Asset paths are placeholders
-  like `assets/hairstyles/<id>/front.webp` — do NOT create image files.
+**`src/search/scorer.ts`**:
 
-### 6. Catalog loader + validation — `src/catalog/index.ts`
+- `searchHairstyles(query: ParsedQuery, styles: Hairstyle[]): ScoredHairstyle[]`
+  with `score = lengthMatch*5 + fringeMatch*4 + textureMatch*3 +
+  attributeMatches*1`, where fringeMatch also honors `requiresFringe`
+  (styles whose fringe is exactly `["none"]` are **excluded** when
+  `requiresFringe === true`, and vice versa styles with only bangs options are
+  excluded when `false`). Results sorted by score desc, zero-score results
+  omitted; if the query parses to nothing (all-stop-words), return all styles
+  unranked.
+- `searchColors(query: ParsedQuery, colors: HairColor[]): HairColor[]` —
+  filter by family/temperature/level hint (dark → level ≤ 4, medium 5–7,
+  light ≥ 8). Any of the three absent → unconstrained.
 
-- `loadColors(): HairColor[]` and `loadHairstyles(): Hairstyle[]` returning
-  validated, frozen arrays from the JSON.
-- Hand-rolled validation (no zod — keep deps minimal): unique ids, kebab-case
-  ids, level in 1..10, opacity/highlightRetention in 0..1, Lab in range
-  (L 0..100, |a|,|b| ≤ 60), non-empty lengths/textures for styles, fringe
-  non-empty (use `["none"]` for no-bangs styles). Throw a descriptive
-  `CatalogValidationError` on violation.
+**Tests — `src/search/__tests__/`** against the real seed catalogs. These five
+canonical queries must produce sensible results (assert on ids/properties, not
+brittle exact orderings beyond the top result where stated):
 
-### 7. Tests — `src/catalog/__tests__/catalog.test.ts`
+1. `"shoulder length with bangs"` → every result includes `shoulder` length
+   and has a real fringe; no `["none"]`-only styles.
+2. `"short and curly"` → top result is short+curly; no long styles.
+3. `"long straight hair without bangs"` → results long+straight, all
+   fringe-compatible with "no bangs".
+4. `"warm red shoulder-length bob"` → `searchColors` returns only warm
+   red-family shades; style results favor shoulder+bob.
+5. `"dark brown curtain bangs"` → colors filtered to dark levels
+   (level ≤ 4) natural/neutral browns included; styles include curtain-bangs.
 
-- Both catalogs load without throwing; counts are 40 and 16.
-- Id uniqueness and shape constraints (exercise the validator against the real
-  data AND against small inline invalid fixtures to prove the validator
-  actually rejects bad data).
-- Plausibility: for natural-family colors, Lab L is monotonically
-  non-decreasing when sorted by level.
+Plus parser unit tests: negation, multi-word synonyms, stop-word-only query,
+empty string.
 
-### 8. Verification (mandatory before writing SUMMARY.md)
+### 4. Minimal search UI — `src/ui/SearchScreen.tsx` + wire into `App.tsx`
 
-Run and capture real output of:
+- A `TextInput` (search box) + results list: each hairstyle result shows name
+  + its matched tags; below it, a horizontal row of matching color swatches
+  (background color from `labToCss(color.targetLab)`, label = displayName).
+- Debounce is unnecessary; parse on every change (catalog is tiny).
+- Keep styling minimal but not broken (SafeAreaView, dark-on-light). No
+  navigation library — `App.tsx` renders `SearchScreen` directly.
+- This must work in plain `expo start` (no native modules).
+
+### 5. Verification (mandatory before writing SUMMARY.md)
 
 ```
-npm run typecheck
-npm run lint
-npm test
+npm run typecheck   # clean
+npm run lint        # 0 errors, 0 warnings
+npm test            # all pass (old 22 + new suites)
+npx expo export --platform android   # bundles cleanly
 ```
 
-All three must pass. Also run `npx expo export --platform android` OR at
-minimum confirm the Metro bundler starts (`npx expo start` briefly) — we need
-evidence the app itself isn't broken, not just the unit tests. If Node 25
-causes engine warnings, note them; only act if something actually fails.
+### 6. Commit
 
-### 9. Commit
-
-One commit: `Iteration 1: scaffold, tooling, domain types, seed catalogs`.
+Stage the pre-existing `docs/SUMMARY.md` changes along with your work. One
+commit: `Iteration 2: color math, query parser, search UI`.
 
 ## Deliverable back to Fable 5
 
-Write `docs/SUMMARY.md` containing:
-
-1. What was done (bullet list mapped to the numbered scope items).
-2. Any deviations from this handoff and why.
-3. Verbatim (trimmed) output of typecheck/lint/test + the bundler/export check.
-4. File inventory of everything created/modified.
-5. Known issues / risks / suggestions for the next iteration.
+Overwrite `docs/SUMMARY.md` with the Iteration-2 report: same five sections as
+Iteration 1 (scope-item mapping, deviations, verbatim verification output,
+file inventory, known issues/suggestions).
 
 ## Hard constraints
 
 - Do not edit `docs/HANDOFF.md`, `docs/PROGRESS.md`, or anything in `.claude/`.
-- Do not install native-module libraries or run prebuild.
-- Do not add a backend, analytics, or any network calls.
+- No native-module libraries, no prebuild, no network calls, no new runtime
+  dependencies at all (dev-deps only if genuinely needed).
 - Do not push, and do not create a GitHub repo.

@@ -65,3 +65,21 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
 ## Iteration log
 
 *(entries appended by Fable 5 on acceptance)*
+
+### Iteration 1 — ACCEPTED (2026-07-10) — M1 complete
+
+- Commit `0bbec82`: Expo SDK 57 blank-TS scaffold (RN 0.86, React 19.2), strict
+  TS, ESLint 9 flat config + eslint-config-expo, jest-expo, prettier.
+- Domain types (`HairColor`, `Hairstyle`), seed catalogs (40 colors / 16
+  styles), hand-rolled validation with frozen/cached loaders, 22 passing tests.
+- Reviewer verification (independent re-run): typecheck clean; lint 0 errors /
+  3 warnings (`Array<T>` style in types.ts — caused by handoff-specified
+  shapes, to be normalized to `T[]` in Iteration 2); 22/22 tests; catalog data
+  plausibility spot-checked (natural L 9→80 monotonic, pastels gated by
+  `minimumRecommendedStartingLevel`); `expo export --platform android` bundles
+  cleanly (582 modules).
+- Notable executor deviation (accepted): scaffold-move path mishap was
+  self-corrected and fully disclosed in SUMMARY.md; template extras
+  (AGENTS.md, LICENSE, template .git) deliberately excluded.
+- Carry-forward: Lab/opacity/highlightRetention values are hand-authored
+  placeholders, to be sanity-checked when M2 color math consumes them.

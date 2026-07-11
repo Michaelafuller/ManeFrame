@@ -26,10 +26,14 @@ export interface Hairstyle {
     leftThreeQuarter?: string;
     rightThreeQuarter?: string;
   };
-  lengths: Array<'buzzed' | 'short' | 'chin' | 'shoulder' | 'medium' | 'long'>;
-  fringe: Array<
-    'none' | 'blunt-bangs' | 'wispy-bangs' | 'curtain-bangs' | 'side-swept'
-  >;
-  textures: Array<'straight' | 'wavy' | 'curly' | 'coily'>;
+  lengths: ('buzzed' | 'short' | 'chin' | 'shoulder' | 'medium' | 'long')[];
+  fringe: (
+    | 'none'
+    | 'blunt-bangs'
+    | 'wispy-bangs'
+    | 'curtain-bangs'
+    | 'side-swept'
+  )[];
+  textures: ('straight' | 'wavy' | 'curly' | 'coily')[];
   attributes: string[]; // free-form tags, e.g. "bob", "layered"
 }
