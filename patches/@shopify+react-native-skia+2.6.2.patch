@@ -1,0 +1,81 @@
+diff --git a/node_modules/@shopify/react-native-skia/lib/commonjs/external/reanimated/useVideoLoading.js b/node_modules/@shopify/react-native-skia/lib/commonjs/external/reanimated/useVideoLoading.js
+index 01dfcfb..c14cd68 100644
+--- a/node_modules/@shopify/react-native-skia/lib/commonjs/external/reanimated/useVideoLoading.js
++++ b/node_modules/@shopify/react-native-skia/lib/commonjs/external/reanimated/useVideoLoading.js
+@@ -7,8 +7,10 @@ exports.useVideoLoading = void 0;
+ var _react = require("react");
+ var _skia = require("../../skia");
+ var _ReanimatedProxy = _interopRequireDefault(require("./ReanimatedProxy"));
++var _renderHelpers = require("./renderHelpers");
+ function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e }; }
+-const runtime = _ReanimatedProxy.default.createWorkletRuntime("video-metadata-runtime");
++// PATCHED (ManeFrame Iteration 4R): see src/external/reanimated/useVideoLoading.ts
++const runtime = _renderHelpers.HAS_REANIMATED_3 ? _ReanimatedProxy.default.createWorkletRuntime("video-metadata-runtime") : null;
+ const useVideoLoading = source => {
+   const {
+     runOnJS
+@@ -21,7 +23,7 @@ const useVideoLoading = source => {
+     runOnJS(setVideo)(vid);
+   }, [runOnJS]);
+   (0, _react.useEffect)(() => {
+-    if (source) {
++    if (source && runtime) {
+       _ReanimatedProxy.default.runOnRuntime(runtime, cb)(source);
+     }
+   }, [cb, source]);
+diff --git a/node_modules/@shopify/react-native-skia/lib/module/external/reanimated/useVideoLoading.js b/node_modules/@shopify/react-native-skia/lib/module/external/reanimated/useVideoLoading.js
+index 307e745..4b9598d 100644
+--- a/node_modules/@shopify/react-native-skia/lib/module/external/reanimated/useVideoLoading.js
++++ b/node_modules/@shopify/react-native-skia/lib/module/external/reanimated/useVideoLoading.js
+@@ -1,7 +1,9 @@
+ import { useCallback, useEffect, useState } from "react";
+ import { Skia } from "../../skia";
+ import Rea from "./ReanimatedProxy";
+-const runtime = Rea.createWorkletRuntime("video-metadata-runtime");
++import { HAS_REANIMATED_3 } from "./renderHelpers";
++// PATCHED (ManeFrame Iteration 4R): see src/external/reanimated/useVideoLoading.ts
++const runtime = HAS_REANIMATED_3 ? Rea.createWorkletRuntime("video-metadata-runtime") : null;
+ export const useVideoLoading = source => {
+   const {
+     runOnJS
+@@ -14,7 +16,7 @@ export const useVideoLoading = source => {
+     runOnJS(setVideo)(vid);
+   }, [runOnJS]);
+   useEffect(() => {
+-    if (source) {
++    if (source && runtime) {
+       Rea.runOnRuntime(runtime, cb)(source);
+     }
+   }, [cb, source]);
+diff --git a/node_modules/@shopify/react-native-skia/src/external/reanimated/useVideoLoading.ts b/node_modules/@shopify/react-native-skia/src/external/reanimated/useVideoLoading.ts
+index 58c64b6..576840e 100644
+--- a/node_modules/@shopify/react-native-skia/src/external/reanimated/useVideoLoading.ts
++++ b/node_modules/@shopify/react-native-skia/src/external/reanimated/useVideoLoading.ts
+@@ -4,8 +4,17 @@ import type { Video } from "../../skia/types";
+ import { Skia } from "../../skia";
+ 
+ import Rea from "./ReanimatedProxy";
++import { HAS_REANIMATED_3 } from "./renderHelpers";
+ 
+-const runtime = Rea.createWorkletRuntime("video-metadata-runtime");
++// PATCHED (ManeFrame Iteration 4R): upstream unconditionally created the
++// worklet runtime at module scope, so merely importing this package (via
++// its own barrel exports) threw `OptionalDependencyNotInstalledError` when
++// react-native-reanimated wasn't installed -- even for apps that never
++// render Skia's <Video>. Guard it the same way the rest of this package
++// guards optional-Reanimated codepaths (see Container.native.js).
++const runtime = HAS_REANIMATED_3
++  ? Rea.createWorkletRuntime("video-metadata-runtime")
++  : null;
+ 
+ type VideoSource = string | null;
+ 
+@@ -21,7 +30,7 @@ export const useVideoLoading = (source: VideoSource) => {
+     [runOnJS]
+   );
+   useEffect(() => {
+-    if (source) {
++    if (source && runtime) {
+       Rea.runOnRuntime(runtime, cb)(source);
+     }
+   }, [cb, source]);

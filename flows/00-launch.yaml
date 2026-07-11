@@ -1,0 +1,13 @@
+appId: com.maneframe.app
+# Phase 0 — app launches and the home (Search) screen renders, both tabs are
+# reachable. THIS is the flow that would have caught the Iteration-4 launch
+# crash: @shopify/react-native-skia unconditionally created a Reanimated
+# worklet runtime at module-load time (via its own barrel exports), which
+# aborted the JS thread before any UI could render. See docs/SUMMARY.md for
+# the logcat evidence and the patch-package fix.
+---
+- launchApp:
+    clearState: true
+- assertVisible: "ManeFrame"
+- assertVisible: "Search"
+- assertVisible: "Preview"

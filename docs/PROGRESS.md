@@ -140,3 +140,31 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
   prebuild happens; on-device check of `readPixels` returning Uint8Array;
   measure chunked-recolor timing on real hardware; watch for memo banding
   with a real (non-smooth) segmentation mask.
+
+### Iteration 4 — ACCEPTED (2026-07-11) — M4 code-complete, on-device verification pending
+
+- Commit `33c50f2`: Google `hair_segmenter.tflite` bundled (781,618 bytes,
+  SHA-256 `2628cf3c…9bf84`, canonical Google storage URL, verified
+  independently by reviewer), `TfliteHairSegmenter` behind the existing
+  interface with runtime shape checks and fallback-to-mock + badge/dev
+  toggle, pure-TS bilinear resize + tensor→mask conversion (handles both
+  1-channel confidence and 2-channel logits layouts), eas.json / metro
+  assetExts / app.json plugins, EAS project created
+  (`cdefda41-c6d1-4f3c-94ef-3b513c66b2ce`). 19 new tests → 126 total.
+- **EAS dev-client build succeeded first attempt** (D7 validated): build
+  `b2445fad-8ab2-43b9-9031-74668d1826f4`, ~9m44s, 1 of 15 monthly builds
+  used.
+- Standout executor work (accepted): hand-parsed the .tflite FlatBuffer to
+  discover the undocumented 4th input channel (previous-frame mask,
+  zero-filled for stills) and that the output is raw 2-class logits needing
+  client-side softmax — the docs alone would have produced a malformed
+  input. `expo-dev-client` added as a structurally required dep (disclosed).
+- Reviewer verification: model hash/size match exactly, 126/126 tests,
+  typecheck/lint clean, EAS build status FINISHED confirmed via
+  `eas build:list`. Also confirmed commit `65d2946` ("main -- init commit")
+  was authored by the user directly, not an agent — benign docs commit.
+- **Gate: M5 (live camera) must not start until the user completes the
+  on-device checklist** in the Iteration-4 SUMMARY.md (badge says "tflite",
+  recolor tracks hair not face, rough latency, toggle works). Segmentation
+  quality/latency findings decide whether M5 proceeds as planned or a
+  remediation iteration tunes the mask pipeline first.

@@ -1,0 +1,12 @@
+appId: com.maneframe.app
+# Preview — switching to the Preview tab renders without crashing (the
+# Canvas/Skia render path is only exercised once a photo is picked, but
+# this flow still proves the tab mounts and the picker entry point renders).
+# Photo picking goes through the system picker/camera intent, which Maestro
+# cannot drive deterministically — that stays a manual verification step
+# (see docs/E2E.md coverage table).
+---
+- launchApp:
+    clearState: true
+- tapOn: "Preview"
+- assertVisible: "Pick a photo"

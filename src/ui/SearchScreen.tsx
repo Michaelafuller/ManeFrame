@@ -71,6 +71,7 @@ export default function SearchScreen({
       <View style={styles.container}>
         <Text style={styles.title}>ManeFrame</Text>
         <TextInput
+          testID="search-input"
           style={styles.searchBox}
           placeholder="Try 'shoulder length with bangs'"
           placeholderTextColor="#888"

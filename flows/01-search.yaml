@@ -1,0 +1,23 @@
+appId: com.maneframe.app
+# Search — the query parser + scorer wired end to end against the seed
+# catalog (18 hairstyles / 40 colors). "Curly Pixie" is the catalog's only
+# short+curly hairstyle, so it is guaranteed to be the (sole) top result for
+# "short and curly" (see src/search/__tests__/scorer.test.ts, canonical
+# query 2). "warm red" has no length/texture hint, so all hairstyle cards
+# render (unranked) each carrying the same color-swatch row, filtered to the
+# 4 warm-red-family shades ("Dark Red Brown", "Red Brown", "Medium Auburn",
+# "Strawberry Blonde") — "Strawberry Blonde" is asserted as one of them.
+---
+- launchApp:
+    clearState: true
+
+- tapOn:
+    id: "search-input"
+- inputText: "short and curly"
+- assertVisible: "Curly Pixie"
+
+- tapOn:
+    id: "search-input"
+- eraseText: 30
+- inputText: "warm red"
+- assertVisible: "Strawberry Blonde"
