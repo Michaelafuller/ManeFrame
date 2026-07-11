@@ -228,3 +228,30 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
   vanilla TFLite (fast-tflite) doesn't register. Fix: swap to Google's
   `selfie_multiclass_256x256.tflite` (standard-ops Image Segmenter model
   whose class 1 is hair), after verifying its op list is custom-op-free.
+
+### Iteration 4R-5 — ACCEPTED (2026-07-11) — REAL SEGMENTATION RUNS ON-DEVICE
+
+- Commits `19d6417`/`a6f844f`: model swapped to
+  `selfie_multiclass_256x256.tflite` (16.4 MB, SHA-256 `c6748b12…07e0e0`,
+  canonical Google URL). Op list independently parsed: **zero CUSTOM ops**
+  (all builtins); input `[1,256,256,3]` float32; output `[1,256,256,6]`
+  raw logits (last op CONV_2D) → client softmax, hair = channel 1.
+  Tensor pipeline made shape-driven (`channels`, `hairChannel`,
+  `outputsAreProbabilities`); 137/137 tests. Camera permission pre-granted
+  via adb + Maestro `permissions:` block (kills the recurring dialog the
+  user reported).
+- **On-device: badge reads "tflite segmentation" with no error** on both
+  dev-client (Metro) and preview build `d5998560` (8 of 15 monthly
+  builds); logcat clean of unresolved-ops. Latency ~2–3s pick-to-recolor.
+- Reviewer verification: independent `npm run e2e` → 4/4; evidence
+  screenshot visually confirmed; op-list findings consistent with code
+  comments.
+- **Environment finding (reviewer):** host C: drive hit 0 bytes free —
+  broke Maestro mid-review and is the leading suspect for the host's
+  recurring BSODs. Reviewer freed ~2.8 GB (project APK downloads, npm
+  cache); ~17 GB of user temp remains for the user to clean themselves.
+- **Milestone: Phase 1 (still-photo recoloring with REAL hair
+  segmentation) is functionally complete pending the user's visual
+  quality check on their own portraits.** Hair-quality tuning (mask
+  feathering, threshold) may warrant a polish iteration after user
+  feedback; then M5 (live camera).

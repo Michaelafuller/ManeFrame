@@ -4,17 +4,23 @@
 
 ## Gate
 
-Iteration 4R is accepted: the app launches (Nitro fix), insets are correct
-(safe-area-context), and all 3 Maestro flows pass on preview build
-`ffa74b55` — which is already installed on the user's phone. Remaining gate
-before M5: the user's manual segmentation checks (badge reads "tflite
-segmentation" after picking a photo, recolor tracks hair rather than face,
-rough pick-to-recolor latency, Mock↔TFLite long-press toggle).
+Iterations 4R through 4R-5 are accepted: the app launches, insets are
+correct, the model loads in release builds, and **real hair segmentation
+runs on-device** (selfie_multiclass, hair = channel 1) — preview build
+`d5998560` is installed on the user's phone, 4/4 Maestro flows green.
 
-Note for this iteration when it starts: the development-profile client
-`68834a2f` is stale (lacks safe-area-context) — M5's native-dependency
-changes require a new development build anyway; build it alongside the
-first M5 EAS build (10 of 15 monthly builds remain).
+Remaining gate before M5: the user's visual quality check on their own
+portrait photos (recolor tracks hair not face; edge quality; Mock↔TFLite
+toggle comparison; rough latency — CPU baseline is ~2–3s). Depending on
+findings, a short polish iteration (mask threshold/feathering, GPU delegate
+experiment) may precede M5.
+
+Notes for when this iteration starts: dev client `32841af6` is CURRENT
+(safe-area-context included; model swaps are asset-only). M5's native deps
+(vision-camera, worklets) require a new development build — build it
+alongside the first M5 EAS build (7 of 15 monthly builds remain). The
+standing privacy rule from PROGRESS.md applies to all M5 automation:
+camera-capture only, never the photo library.
 
 The user's findings determine this iteration's shape:
 
