@@ -1,0 +1,22 @@
+appId: com.maneframe.app
+# Photo -> real tflite segmentation (Iteration 4R-4). Picks the test image
+# pushed to /sdcard/Pictures/maneframe-test-portrait.png via the system
+# photo library picker, then asserts the segmenter badge reads "tflite
+# segmentation" (not "mock segmentation" and not "tflite failed -> mock") -
+# proving the release-mode model load actually succeeds end to end.
+#
+# The system Photo Picker grid is outside the app's accessibility tree (see
+# docs/E2E.md's "Photo picking" coverage row), so the tap that selects our
+# pushed image uses a device-specific coordinate (top-left/most-recent
+# thumbnail) rather than a text/id selector. This flow is tied to this
+# physical device's picker layout and may need its coordinate adjusted on a
+# different device or Android version.
+---
+- launchApp:
+    clearState: true
+- tapOn: "Preview"
+- tapOn: "Pick a photo"
+- tapOn: "Choose from Library"
+- tapOn:
+    point: "15%,62%"
+- assertVisible: "tflite segmentation"
