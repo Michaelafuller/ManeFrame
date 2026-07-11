@@ -46,6 +46,17 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
 - **D6 — Local git repository** with one commit per accepted iteration, so each
   review can diff exactly what an iteration changed. Local only; nothing is
   pushed.
+- **D7 — EAS Build for native builds (2026-07-10, supersedes local Gradle
+  plan).** Dev-client APKs are built on EAS cloud workers from app.json via
+  Continuous Native Generation — no local prebuild, no local Gradle/NDK, no
+  `android/` in the repo, and sideload via internal-distribution QR (no USB
+  debugging). Free tier: 15 Android builds/month, 45-min timeout — ample,
+  since native rebuilds are only needed when native deps change; day-to-day
+  JS iteration runs through Metro over Wi-Fi against the installed dev
+  client. Trade-off accepted: each build uploads project source to Expo's
+  build service (no secrets in repo; the shipped app remains fully offline).
+  Login/account are user-only actions; agents may only run `eas whoami` and
+  `eas build`.
 
 ## Milestone roadmap
 
@@ -104,3 +115,28 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
 - Environment note: no Android AVD or physical device available on this
   machine — visual verification stays at bundler/unit-test level until the
   user provides one.
+
+### Iteration 3 — ACCEPTED (2026-07-10) — M3 complete
+
+- Commit `b5baf8e`: MockHairSegmenter (deterministic soft elliptical mask,
+  11 tests), CPU `recolorImage` + chunked/cancellable variant (6 tests),
+  PreviewScreen (picker → downscale → Skia decode → segment → recolor →
+  Skia re-encode, press-and-hold before/after, intensity presets),
+  two-tab app shell, catalog grown to 18 styles (short+curly gap closed),
+  UI smoke tests. Deps added: @shopify/react-native-skia 2.6.2,
+  expo-image-picker, expo-image-manipulator (+ @testing-library/react-native
+  dev-dep). Everything remains Expo Go-compatible; no prebuild.
+- Reviewer verification (independent re-run): 107/107 tests, typecheck/lint
+  clean, `expo export --platform android` bundles (857 modules). STOP
+  condition (Skia breaking Metro) not triggered — D3 stands.
+- Executor deviation of note (accepted, and a genuine spec fix): the recolor
+  memo key includes the confidence sample, because `recolorPixel` output
+  depends on confidence — the handoff's color-only key would have produced
+  wrong colors along soft mask edges.
+- Milestone significance: **Phase 1 of the settled plan (still-photo
+  recoloring, fully offline) is code-complete**, verified to the limit of
+  available hardware (no device/emulator on this machine).
+- Carry-forwards for M4: add picker/manipulator to app.json plugins when
+  prebuild happens; on-device check of `readPixels` returning Uint8Array;
+  measure chunked-recolor timing on real hardware; watch for memo banding
+  with a real (non-smooth) segmentation mask.

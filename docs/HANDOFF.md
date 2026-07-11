@@ -1,157 +1,114 @@
-# HANDOFF — Iteration 3 (Milestone M3: still-photo preview with mock segmentation + Skia)
+# HANDOFF — Iteration 4 (Milestone M4: real hair segmentation via fast-tflite, EAS dev build)
 
-**Author:** Fable 5 (planner) · **Executor:** Sonnet 5 · **Date:** 2026-07-10
+**Author:** Fable 5 (planner) · **Executor:** Sonnet 5 · **Status: PRIMED — awaiting user prerequisites**
+
+## Prerequisites the USER must complete before this iteration starts
+
+1. **Create a free Expo account** and run `eas login` once on this machine
+   (executor agents must never handle these credentials; they only verify
+   login state via `eas whoami`).
+2. **Have an Android phone available** to install the dev-client APK via the
+   EAS internal-distribution link/QR (needs only the "install unknown apps"
+   permission — no USB debugging or adb).
 
 ## Context
 
-Iterations 1–2 accepted (commits `0bbec82`, `20711ee`): catalogs, color math
-(`src/color/`), search (`src/search/`), SearchScreen. Read `docs/PROGRESS.md`
-(decisions D1–D6 and the iteration log). This iteration builds the
-still-photo recolor preview using a **mock** segmenter (D3/D5). Everything
-must remain **Expo Go-compatible**: you may add Expo-Go-bundled libraries, but
-still NO `expo prebuild` and NO libraries requiring a custom dev build.
+Iterations 1–3 accepted (`0bbec82`, `20711ee`, `b5baf8e`). Phase 1
+(still-photo recoloring with a mock segmenter) is code-complete and Expo
+Go-compatible. This iteration replaces the mock with Google's real
+hair-segmentation model via `react-native-fast-tflite` (decision D2), which
+requires leaving Expo Go for a custom dev client. Per decision D7 (EAS
+path), the native build happens on EAS cloud workers — **no local
+`expo prebuild`, no local Gradle, no `android/` directory in the repo**.
+The free tier allows 15 Android builds/month with a 45-minute timeout;
+this iteration should consume exactly one (plus at most one retry).
 
-Environment fact: this machine has **no Android emulator and no attached
-device**. Verification is typecheck/lint/tests/export only; do not attempt to
-install an emulator.
+## Scope
 
-## Scope — do ALL of the following, and NOTHING outside it
+### 1. Model acquisition
 
-### 1. Catalog data fix (carry-forward from Iteration 2)
+- Download Google's MediaPipe hair segmentation model
+  (`hair_segmenter.tflite`, Apache-2.0; from the MediaPipe image-segmenter
+  documentation's official Google storage URL). Place at
+  `assets/models/hair_segmenter.tflite`. Record the exact URL, file size,
+  and SHA-256 in SUMMARY.md. If the canonical Google URL is dead, STOP and
+  report — do not source the model from an unofficial mirror.
 
-- Add **2 styles** to `src/catalog/data/hairstyles.json`: a short+curly style
-  (e.g. `curly-pixie`, lengths `["short"]`, textures `["curly"]`) and a
-  chin+coily style (e.g. `coily-bob`). Catalog count 16 → 18; update the
-  count test.
-- Tighten the canonical-query-2 test ("short and curly") to assert the top
-  result is now literally short+curly.
+### 2. Dependencies + configuration (Continuous Native Generation only)
 
-### 2. Allowed new dependencies (exactly these, latest versions compatible with SDK 57)
+- `npx expo install react-native-fast-tflite`.
+- `app.json`: add config plugins for `expo-image-picker` and
+  `expo-image-manipulator` (permission strings) and `react-native-fast-tflite`
+  if it ships one. Set a sensible `android.package` (e.g.
+  `com.maneframe.app`) if not already set.
+- `metro.config.js`: extend the default Expo config so `tflite` is in
+  `assetExts` (create the file; it doesn't exist yet).
+- `eas.json`: create with two profiles —
+  - `development`: `developmentClient: true`, `distribution: "internal"`
+    (produces a sideloadable APK with the dev client).
+  - `preview`: `distribution: "internal"`, plain release APK (not used this
+    iteration; primed for later).
+- Do NOT run `expo prebuild` locally and do NOT commit an `android/`
+  directory. If EAS's remote prebuild fails, fix it via app.json/plugins,
+  never via manual native edits (report as blocked if plugins can't express
+  something).
 
-- `@shopify/react-native-skia` (bundled in Expo Go)
-- `expo-image-picker`
-- `expo-image-manipulator`
+### 3. Real segmenter — `src/segmentation/tflite.ts`
 
-Install with `npx expo install` so versions match the SDK. Nothing else.
+- `TfliteHairSegmenter implements HairSegmenter`:
+  - Lazy singleton model load (`loadTensorflowModel(require('...tflite'))`).
+  - Inspect and handle the model's actual I/O: resize the input RGBA pixels
+    to the model's expected input dims (bilinear, pure TS, RGB float
+    normalization per model requirements), run inference, convert the output
+    tensor (confidence map or categorical — determine from the tensor shape
+    and document which in SUMMARY.md) into `HairMask` (0..1 Float32Array).
+  - On any load/inference failure: throw a typed error; never crash the UI.
+- PreviewScreen: default to `TfliteHairSegmenter`; if construction/first
+  inference fails, fall back to `MockHairSegmenter` and show a small visible
+  "mock segmentation" badge. Add a dev toggle (long-press the badge area or a
+  simple switch) to force Mock ↔ TFLite for comparison.
+- Unit tests for the pure parts only: bilinear resize (known 2×2→4×4
+  values), tensor→mask conversion with synthetic tensors (both plausible
+  output layouts), fallback selection logic (with a stubbed failing
+  segmenter). Real inference is device-only; do not attempt it in Jest.
 
-### 3. Segmentation interface — `src/segmentation/`
-
-**`src/segmentation/types.ts`**:
-
-```ts
-export interface HairMask {
-  width: number;            // mask resolution (may be smaller than photo)
-  height: number;
-  data: Float32Array;       // row-major, length = width*height, values 0..1
-}
-export interface HairSegmenter {
-  readonly name: string;
-  segment(imageWidth: number, imageHeight: number, pixels: Uint8Array | null): Promise<HairMask>;
-}
-```
-
-(`pixels` nullable because the mock ignores them; the real tflite segmenter in
-M4 will need them. RGBA byte order, row-major.)
-
-**`src/segmentation/mock.ts`** — `MockHairSegmenter`:
-
-- Returns a mask at max 256px on the long side (preserving aspect).
-- Shape: a soft "hair cap" — an ellipse centered at (0.5w, 0.38h), radii
-  (0.34w, 0.30h), value 1 inside, falling smoothly (smoothstep) to 0 over an
-  edge band of ~0.08w; additionally carve out a smaller face ellipse centered
-  (0.5w, 0.48h), radii (0.20w, 0.22h) where the mask is multiplied down to
-  ≤0.15 (hairline should survive above the face, cheeks should not recolor).
-  Deterministic, no randomness.
-
-**Tests — `src/segmentation/__tests__/mock.test.ts`**: dimensions/aspect,
-all values within 0..1, center-top of hair band ≈1, image corners ≈0, face
-center ≤0.15, symmetry about the vertical axis, determinism (two calls equal).
-
-### 4. CPU image recolor — `src/color/recolorImage.ts`
-
-```ts
-export function recolorImage(
-  rgba: Uint8Array,            // w*h*4, straight alpha, RGBA
-  width: number, height: number,
-  mask: HairMask,              // may be lower-res; sample nearest-neighbor
-  params: RecolorParams
-): Uint8Array;                 // new buffer, same dims
-```
-
-- Reuses `recolorPixel` per pixel with `confidence = maskSample`.
-- Skip work when maskSample < 0.01 (copy pixel through).
-- Performance: build a per-iteration memo keyed on quantized input color
-  (e.g. 5-bit/channel key → output) — hair regions have few distinct colors,
-  this typically cuts Lab conversions by >90%. Keep it simple (a `Map`).
-- Tests (`src/color/__tests__/recolorImage.test.ts`): synthetic 8×8 image —
-  mask=0 region byte-identical to input; mask=1 region equals direct
-  `recolorPixel` output; alpha channel untouched; nearest-neighbor sampling
-  exercised with a 4×4 mask on the 8×8 image; memo path returns identical
-  results to non-memo path (test both by recoloring an image with repeated
-  colors and comparing against per-pixel recolorPixel).
-
-### 5. Preview screen — `src/ui/PreviewScreen.tsx`
-
-Flow:
-
-1. "Pick a photo" button → `expo-image-picker` (media library; also offer
-   camera if permission granted — both behind one small chooser).
-2. Downscale via `expo-image-manipulator` to max 768px long side (JPEG).
-3. Decode to pixels **with Skia**: `Skia.Data.fromURI` →
-   `Skia.Image.MakeImageFromEncoded` → `readPixels()` (RGBA_8888). No other
-   decoding path.
-4. Run `MockHairSegmenter` → `recolorImage` with the selected catalog color →
-   `Skia.Image` from the recolored pixels (`Skia.Image.MakeImage` with
-   matching ImageInfo) → draw original and recolored side-by-side-toggleable
-   (a "before/after" press-and-hold: show original while pressed).
-5. Controls: horizontal swatch row (reuse the swatch look from SearchScreen;
-   selecting a color re-runs recolor), and intensity presets — three buttons
-   `Subtle 0.5 / Natural 0.8 / Bold 1.0` (no slider dependency).
-6. Recolor runs are async (wrap the pixel loop in `await new Promise(r =>
-   setTimeout(r,0))` chunks every ~50k pixels so JS thread isn't frozen);
-   show a simple "Processing…" state; ignore stale results if the user
-   switches colors mid-run (token/sequence check).
-
-**App shell**: replace App.tsx's direct SearchScreen render with a minimal
-two-tab switcher (plain Pressables in a bottom bar: "Search" / "Preview") —
-still no navigation library. Selecting a hairstyle in Search does nothing new
-yet (M6 wires styles); selecting a *color swatch* in Search should switch to
-Preview with that color preselected (lift selected-color state into App.tsx).
-
-### 6. UI smoke tests
-
-- `src/ui/__tests__/` — with `@testing-library/react-native` (add as
-  dev-dependency; it works with jest-expo): render App, assert both tabs
-  render and switching tabs shows PreviewScreen's "Pick a photo" button.
-  Mock `expo-image-picker`/`expo-image-manipulator`/Skia modules minimally
-  (jest module mocks) — do NOT attempt to exercise real Skia in Jest; the
-  pixel pipeline is already covered by pure-function tests.
-
-### 7. Verification (mandatory before writing SUMMARY.md)
+### 4. Verification (mandatory before writing SUMMARY.md)
 
 ```
-npm run typecheck   # clean
-npm run lint        # 0 errors, 0 warnings
-npm test            # all suites pass
-npx expo export --platform android   # bundles cleanly with Skia + pickers
+npm run typecheck && npm run lint && npm test
+npx expo export --platform android          # JS bundle still clean
+eas whoami                                  # confirm user logged in; STOP if not
+eas build --platform android --profile development --non-interactive --wait
 ```
 
-If `@shopify/react-native-skia` breaks the Metro/export step in any way,
-STOP, do not work around it with hacks — document precisely what failed in
-SUMMARY.md and mark the iteration blocked (this is decision-relevant for the
-planner: it would mean Skia must move behind a dev build, changing D3).
+- Capture the EAS build URL, build ID, and final status in SUMMARY.md. The
+  build MUST succeed; if it fails, read the EAS build logs, fix config-level
+  causes, and retry **at most once** (two failed builds = blocked, report).
+- On-phone runtime verification (real photo, segmentation quality, recolor
+  latency) is done by the USER after sideloading — list precisely what the
+  user should check in SUMMARY.md ("Verification requests for the user"
+  section): install via the QR link, pick a portrait photo, confirm hair —
+  not face — recolors, note seconds from photo pick to first recolor, try
+  the Mock↔TFLite toggle.
 
-### 8. Commit
+### 5. Commit
 
 Stage everything including the previous `docs/SUMMARY.md` state, one commit:
-`Iteration 3: still-photo preview, mock segmentation, Skia pipeline`.
-Then overwrite `docs/SUMMARY.md` with the Iteration-3 report (left
-uncommitted), same five sections as before.
+`Iteration 4: real hair segmentation (fast-tflite), EAS dev build`.
+Then overwrite `docs/SUMMARY.md` with the Iteration-4 report (left
+uncommitted), same five sections as before, plus the new "Verification
+requests for the user" section.
 
 ## Hard constraints
 
 - Do not edit `docs/HANDOFF.md`, `docs/PROGRESS.md`, or `.claude/`.
-- No `expo prebuild`; only the three runtime deps listed (plus
-  `@testing-library/react-native` as dev-dep).
-- No network calls at runtime; no analytics.
-- Do not push, do not create a GitHub repo, do not install an emulator.
+- No hand-written Swift/Kotlin (D2). If fast-tflite is genuinely
+  incompatible, STOP and report rather than improvising.
+- Never run `eas login`, never handle Expo credentials, never create an Expo
+  account; `eas whoami` is the only auth interaction allowed.
+- The model file is bundled; the app itself makes no network calls at
+  runtime. No analytics.
+- Do not push to any git remote, do not create a GitHub repo. (The `eas
+  build` source upload to Expo's build service is expected and allowed —
+  decision D7.)
+- Stay within one EAS build (one retry max).
