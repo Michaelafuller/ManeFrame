@@ -34,6 +34,41 @@ adb install -r maneframe-dev-client.apk
 
 ---
 
+## Permissions (avoiding the repeat camera-permission dialog)
+
+Every `launchApp: { clearState: true }` (every flow starts with this) also
+resets the app's OS-level runtime permission grants, so **without doing
+anything else, the first camera-touching step after every single flow run
+re-triggers the "Allow ManeFrame to take pictures?" system dialog** — a
+user-reported annoyance during iteration (Iteration 4R-5). Two ways to
+avoid it:
+
+1. **In a Maestro flow**: use `launchApp`'s `permissions:` block (see
+   `flows/03-photo-tflite.yaml`):
+   ```yaml
+   - launchApp:
+       clearState: true
+       permissions:
+         camera: allow
+   ```
+2. **In a manual/ad-hoc session** (Metro iteration, ad-hoc verification
+   flows, or just poking at the app by hand) — pre-grant once per install
+   with adb, before launching:
+   ```bash
+   adb shell pm grant com.maneframe.app android.permission.CAMERA
+   ```
+
+ManeFrame only declares one runtime permission that matters here —
+`android.permission.CAMERA` (confirmed via
+`adb shell dumpsys package com.maneframe.app | grep permission`; no
+media/read-images runtime permission is declared, since the app's automated
+flows never touch the library picker's content — see the standing privacy
+rule in `docs/PROGRESS.md`). Granting it doesn't touch the photo library in
+any way; it just silences a dialog automation can't dismiss on its own
+without a flaky OS-version-specific selector.
+
+---
+
 ## Two modes: iteration vs. acceptance
 
 Maestro always targets whatever's currently installed as `com.maneframe.app`

@@ -22,6 +22,15 @@ appId: com.maneframe.app
 ---
 - launchApp:
     clearState: true
+    # Pre-grant the camera permission so `clearState`'s permission reset
+    # never surfaces the OS "Allow ManeFrame to take pictures?" dialog
+    # mid-flow (Iteration 4R-5, user-reported annoyance - see
+    # docs/E2E.md's "Permissions" section for the adb equivalent used in
+    # manual sessions). The app declares no other runtime permission (see
+    # `adb shell dumpsys package com.maneframe.app | grep permission`) -
+    # only CAMERA needs pre-granting.
+    permissions:
+      camera: allow
 - tapOn: "Preview"
 - tapOn: "Pick a photo"
 - tapOn: "Choose from Library"

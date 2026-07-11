@@ -14,13 +14,13 @@ describe('resolveModelSource', () => {
   it('returns the existing localUri without downloading when already present', async () => {
     const downloadAsync = jest.fn(() => Promise.resolve());
     const asset: ModuleAssetLike = {
-      localUri: 'file:///cache/hair_segmenter.tflite',
+      localUri: 'file:///cache/selfie_multiclass_256x256.tflite',
       downloadAsync,
     };
 
     const result = await resolveModelSource(asset);
 
-    expect(result).toEqual({ url: 'file:///cache/hair_segmenter.tflite' });
+    expect(result).toEqual({ url: 'file:///cache/selfie_multiclass_256x256.tflite' });
     expect(downloadAsync).not.toHaveBeenCalled();
   });
 

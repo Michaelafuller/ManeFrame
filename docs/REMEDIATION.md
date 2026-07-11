@@ -1,120 +1,115 @@
-# REMEDIATION — Iteration 4R-4 (tflite fails to load in release builds + UX fixes)
+# REMEDIATION — Iteration 4R-5 (swap to a standard-ops segmentation model)
 
 **Author:** Fable 5 (planner) · **Executor:** Sonnet 5 · **Date:** 2026-07-11
-**Supersedes 4R-3 (accepted and closed). This order addresses the user's
-on-device findings from the M5 gate checklist.**
+**Supersedes 4R-4 (accepted). This order removes the last blocker between
+the user and real on-device hair segmentation.**
 
-## User findings (preview build `ffa74b55` on their phone)
+## Context
 
-1. Badge always reads "mock segmentation" — **TFLite never loads**; the
-   fallback engages silently. Everything else they saw follows from this:
-   the "halo around the head" recolor and "wispy cotton candy" hair are the
-   mock's soft ellipse, not the real model.
-2. Long-press toggle appears to do nothing — consistent: forcing tflite
-   fails → falls back → badge stays "mock". Not a separate bug, but the UI
-   must stop hiding the failure reason.
-3. Pick-to-recolor latency 1.5–2s — acceptable, no action.
-4. UX asks (in scope, cheap): photo not centered/fully visible; selected
-   color not identifiable in the Preview screen.
+4R-4 proved the model *file* loads in release builds, which exposed the
+real terminal blocker: `hair_segmenter.tflite` is the classic MediaPipe
+hair model and requires MediaPipe's custom TFLite ops
+(`MaxPoolingWithArgmax2D` et al.). `react-native-fast-tflite` runs vanilla
+TFLite and cannot register custom ops without hand-written native code —
+which decision D2 forbids. The model must be swapped, not the runtime.
 
-## Planner diagnosis (high confidence — verify with logcat, then fix)
-
-`src/segmentation/tflite.ts` loads the model via
-`loadTensorflowModel(hairSegmenterModelAsset, [])` where the asset is a
-Metro `require(..)` number. fast-tflite's JS (read
-`node_modules/react-native-fast-tflite/lib/module/loadTensorflowModel.js`)
-resolves that through `Image.resolveAssetSource(...)` and hands
-`asset.uri` to its native `AssetLoader`. In DEV (Metro) that URI is an
-`http://.../assets/...` URL and works; in RELEASE builds it's an Android
-resource reference that the native loader cannot open → load fails →
-`segmentWithFallback` silently swallows the error. The `[]` delegates
-argument is correct API usage (v3 takes `TensorflowModelDelegate[]`) — do
-not change it.
-
-Useful: fast-tflite `console.log`s "Loading Tensorflow Lite Model …" and
-"Resolved Model path: …" even in release — visible in logcat
-(`adb logcat -d | grep -i "Resolved Model path"`), right before the
-failure. Capture this as evidence before and after the fix.
+**Replacement:** Google's MediaPipe Image Segmenter multiclass model
+`selfie_multiclass_256x256.tflite` (canonical URL pattern:
+`https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite`,
+Apache-2.0). Its categories are `0 background, 1 hair, 2 body-skin,
+3 face-skin, 4 clothes, 5 others` — channel 1 is exactly what we need, and
+as a bonus the face-skin channel may be useful later. Expect ~16 MB (vs
+782 KB) — acceptable; note the app-size impact in SUMMARY.
 
 ## Scope
 
-### 1. Fix the model load path
+### 1. Acquire + VERIFY the model before wiring anything
 
-- `npx expo install expo-asset` (if not already a resolvable dependency —
-  it is JS-level, riding on expo's existing native modules).
-- In `tflite.ts`'s lazy loader: resolve the model with
-  `Asset.fromModule(hairSegmenterModelAsset)` → `await asset.downloadAsync()`
-  → pass `{ url: asset.localUri }` to `loadTensorflowModel`, throwing a
-  descriptive `TfliteSegmentationError` if `localUri` is null. Keep the
-  retry-on-failure singleton behavior and `[]` delegates.
-- Unit-test the pure part you can (e.g. a small `resolveModelSource`
-  helper given a stubbed Asset) — do not exercise real expo-asset in Jest
-  beyond a trivial mock.
+- Download from the canonical URL (verify against the MediaPipe image
+  segmenter docs; if dead, STOP). Record URL, size, SHA-256.
+- **Parse the .tflite FlatBuffer op list BEFORE integrating** (reuse the
+  4R FlatBuffers-reader technique): every operator must be a TFLite
+  builtin — zero `CUSTOM` ops. If any custom op exists, STOP and report
+  (do not hunt for alternative models on your own).
+- While parsed, record: exact input shape/type, output tensor shape(s)/
+  type(s), and whether the graph's final op is `SOFTMAX` (i.e. outputs are
+  probabilities) or not (logits needing client-side softmax). Put this in
+  SUMMARY like 4R did — it drives the tensor code below.
 
-### 2. Stop hiding segmentation failures
+### 2. Wire it in (shape-driven, not hardcoded)
 
-- `segmentWithFallback` already returns `error`; PreviewScreen must now
-  (a) `console.warn` the full error chain (message + cause) so logcat
-  always has it, and (b) when the fallback engaged, render a one-line
-  muted text under the badge: `tflite failed: <error.message>` (truncate
-  ~60 chars). When the user long-presses to force tflite and it fails,
-  the badge text becomes "tflite failed → mock" so the toggle visibly did
-  something.
+- Replace `assets/models/hair_segmenter.tflite` with the new model file
+  (delete the old one — it can never run under D2).
+- `src/segmentation/tensor.ts`:
+  - `buildSegmenterInputTensor` gains a `channels` parameter (3 or 4)
+    driven by the model's runtime-reported input shape; 3-channel input =
+    plain normalized RGB, no previous-mask channel.
+  - `tensorToHairMask` gains an explicit `hairChannel` (default 1) and an
+    `outputsAreProbabilities` flag: when true, take channel `hairChannel`
+    clamped 0..1 (no softmax); when false, softmax as today. Both paths
+    unit-tested with synthetic tensors (extend to a 6-channel case).
+- `src/segmentation/tflite.ts`: accept input shapes `[1,N,N,3]` or
+  `[1,N,N,4]`; wire the probabilities flag from what step 1 determined
+  (hardcode the determination for THIS model with a comment citing the op
+  list; keep the loud `TfliteSegmentationError` on anything unexpected).
+- Update all affected unit tests + the SHA-256 note in code comments if
+  present. Full local suite green.
 
-### 3. UX fixes (user-requested)
+### 2b. Kill the recurring permission prompts (user-reported annoyance)
 
-- **Photo fit:** render the photo contain-fit (letterboxed, centered) in
-  the canvas so the whole photo is always visible — do not attempt face
-  detection or pan/zoom gestures this iteration (note pan/zoom as a
-  possible later nicety in SUMMARY known-issues).
-- **Selected color visibility:** show the selected color's `displayName`
-  next to the "Color" heading (e.g. "Color — Dark Copper Blonde"), and on
-  mount scroll the swatch row so the selected swatch is visible
-  (`scrollTo` with an estimated offset is fine).
+- Pre-grant permissions non-interactively before any automated launch:
+  `adb shell pm grant com.maneframe.app android.permission.CAMERA` (and
+  the media/read-images permission if the app declares one — check
+  `adb shell dumpsys package com.maneframe.app | grep permission`).
+- Bake this into the flows (Maestro `launchApp` supports a `permissions:`
+  block — use it in 03-photo-tflite) AND document the adb one-liner in
+  docs/E2E.md so manual sessions don't hit the dialog either.
 
-### 4. Builds + on-device verification (device required — see note)
+### 3. Verify on-device via dev client + Metro (free iteration — no build yet)
 
-The phone was unplugged after the user's manual checks; it should be back.
-Check `adb devices` before device steps; if absent when you reach them,
-STOP there and report everything staged (code committed, builds done,
-device steps listed as pending).
+- Dev client `32841af6` is CURRENT (model swap is a JS/asset change; no
+  native fingerprint change — do NOT rebuild the development profile).
+- Metro + `adb reverse` + deep link (recipe in docs/E2E.md). Use the
+  **camera-capture path only** — **standing rule from PROGRESS.md: never
+  browse or search the device photo library in any automated flow; the
+  4R-4 privacy incident is why.** Confirm:
+  - Badge reads "tflite segmentation" (no red error line).
+  - Logcat shows the model preparing + inferring without `unresolved-ops`.
+  - The recolor visibly follows something plausibly hair-shaped rather
+    than the mock's centered ellipse (point the camera at anything;
+    perfect quality judgment stays with the user — but capture a
+    screenshot pair mock-vs-tflite of the same capture via the long-press
+    toggle as evidence that the mask actually changed).
+  - Note observed pick-to-recolor latency vs the ~1.5–2s CPU baseline
+    (256×256 input should be faster than the old 512×512 path).
 
-- **Build the development client first** (`--profile development`, build 6
-  of 15; it was stale since safe-area-context anyway). Install it, start
-  Metro (`adb reverse tcp:8081 tcp:8081`, deep-link), and verify the fix
-  live: push a portrait-ish test image to the device
-  (`adb push … /sdcard/Pictures/` + media-scan broadcast), pick it in the
-  app, and confirm the badge reads "tflite segmentation" and logcat shows
-  a successful load. Iterate here (JS-only, free) until it does.
-- Then **preview build** (`--profile preview`, build 7 of 15), install,
-  and:
-  - New Maestro flow `flows/03-photo-tflite.yaml`: tap "Pick a photo" →
-    library → select the pushed test image (device-specific system-picker
-    steps are acceptable; note that in E2E.md) → assert the badge text is
-    "tflite segmentation". 
-  - `npm run e2e` — **4/4 flows green** is the acceptance gate.
-  - Screenshot evidence: recolored photo with the real (non-ellipse)
-    mask, contain-fit letterboxing, selected-color label. READ the pngs.
-- Budget: max 3 EAS builds this session, target 2 (one dev + one preview).
+### 4. One preview build + green E2E
+
+- Commit, then `eas build --platform android --profile preview
+  --non-interactive` (build 8 of 15; max one retry). Download,
+  `adb install -r`, `npm run e2e` → **4/4 required** (flow 03 remains
+  entry-point-only; do not extend it into the library).
+- Evidence: screenshot on the preview build showing "tflite segmentation"
+  badge on a camera capture.
 
 ### 5. Commit + report
 
-- Commit before each EAS build as established. Suggested messages:
-  `Iteration 4R-4: expo-asset model loading, segmentation error surfacing, preview UX`
-  and (if needed) `Iteration 4R-4: e2e flow for tflite photo path`.
-- Overwrite `docs/SUMMARY.md` (uncommitted): five sections + before/after
-  logcat "Resolved Model path" evidence + results.xml + updated
-  "Verification requests for the user" (their segmentation-quality
-  checklist, now genuinely against the real model).
+- Suggested messages: `Iteration 4R-5: selfie_multiclass model, shape-driven
+  tensor pipeline` (+ optional small follow-up commit for e2e/evidence).
+- Overwrite `docs/SUMMARY.md` (uncommitted): five sections, the op-list/
+  I/O determination, before/after logcat, results.xml, evidence, and
+  "Verification requests for the user" — their real segmentation-quality
+  checklist on their own portrait photos (manually, via their own library
+  picking — fine when THEY do it), plus a note on the APK size change.
 
 ## Hard constraints
 
 - Do not edit `docs/HANDOFF.md`, `docs/PROGRESS.md`, `docs/REMEDIATION.md`,
   `.claude/`.
-- New dependencies: `expo-asset` ONLY. No hand-written native code, no
-  local prebuild, no analytics, no runtime network calls (expo-asset's
-  `downloadAsync` on a bundled asset is a local copy, not a download).
-- Max 3 EAS builds; never touch credentials (`eas whoami`/`eas build`/
-  `eas build:list` only). Do not push.
-- Only touch `com.maneframe.app` and your own pushed test image on the
-  phone.
+- No new dependencies at all. No hand-written native code, no prebuild.
+- **Never open, browse, or search the device photo library from automation;
+  camera-capture only.** Only touch `com.maneframe.app` and content your
+  automation creates.
+- Max 2 EAS builds (preview only; the dev client must NOT be rebuilt).
+- Never touch credentials; `eas whoami`/`eas build`/`eas build:list` only.
+- No push, no analytics, no runtime network calls.

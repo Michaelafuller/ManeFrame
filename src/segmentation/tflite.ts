@@ -1,6 +1,18 @@
 /**
- * Real hair segmentation via Google's MediaPipe `hair_segmenter.tflite`
- * model, run on-device through `react-native-fast-tflite`.
+ * Real hair segmentation via Google's MediaPipe Image Segmenter
+ * `selfie_multiclass_256x256.tflite` model, run on-device through
+ * `react-native-fast-tflite`.
+ *
+ * Iteration 4R-5 swapped this in for the classic `hair_segmenter.tflite`:
+ * that model requires MediaPipe's custom TFLite ops
+ * (`MaxPoolingWithArgmax2D` et al.), which vanilla `react-native-fast-tflite`
+ * cannot register (see docs/REMEDIATION.md). This replacement's op list was
+ * verified custom-op-free before integration - see docs/SUMMARY.md
+ * Iteration 4R-5 for the full flatbuffer dump. Its 6 output categories are
+ * `background, hair, body-skin, face-skin, clothes, others` (channel 1 is
+ * hair), and the graph's last op is `CONV_2D` (not `SOFTMAX`) so the output
+ * is raw per-class logits requiring client-side softmax - hence
+ * `MODEL_OUTPUTS_ARE_PROBABILITIES = false` below.
  *
  * This file is the only place in `src/segmentation` that touches a native
  * module - everything it depends on (`buildSegmenterInputTensor`,
@@ -13,9 +25,21 @@
 import { Asset } from 'expo-asset';
 import { loadTensorflowModel, type TfliteModel } from 'react-native-fast-tflite';
 
-import hairSegmenterModelAsset from '../../assets/models/hair_segmenter.tflite';
+import hairSegmenterModelAsset from '../../assets/models/selfie_multiclass_256x256.tflite';
 import { buildSegmenterInputTensor, TFLITE_INPUT_SIZE, tensorToHairMask } from './tensor';
 import type { HairMask, HairSegmenter } from './types';
+
+/**
+ * Hardcoded for `selfie_multiclass_256x256.tflite` specifically, per the
+ * op-list/output-tensor determination in docs/SUMMARY.md Iteration 4R-5:
+ * the graph's last op is `CONV_2D`, not `SOFTMAX`, so channel values are
+ * raw logits and must be softmaxed client-side (`tensorToHairMask` does
+ * this when `false`). Update this comment (and re-verify via the
+ * flatbuffer op list) if the model is ever swapped again.
+ */
+const MODEL_OUTPUTS_ARE_PROBABILITIES = false;
+/** MediaPipe's documented category order for this model: index 1 is "hair". */
+const MODEL_HAIR_CHANNEL = 1;
 
 /** Thrown for any model load or inference failure. Never lets the UI crash. */
 export class TfliteSegmentationError extends Error {
@@ -77,7 +101,8 @@ let modelPromise: Promise<TfliteModel> | null = null;
 function loadModel(): Promise<TfliteModel> {
   if (!modelPromise) {
     modelPromise = (async () => {
-      const source = await resolveModelSource(Asset.fromModule(hairSegmenterModelAsset));
+      const rawAsset = Asset.fromModule(hairSegmenterModelAsset);
+      const source = await resolveModelSource(rawAsset);
       return loadTensorflowModel(source, []);
     })().catch((e: unknown) => {
       // Allow a later call to retry loading rather than permanently
@@ -111,20 +136,28 @@ export class TfliteHairSegmenter implements HairSegmenter {
     }
 
     const inputInfo = model.inputs[0];
-    const inputSize =
-      inputInfo && inputInfo.shape.length === 4 && inputInfo.shape[3] === 4
-        ? inputInfo.shape[1]
-        : null;
+    const inputChannels = inputInfo?.shape?.[3];
+    const isValidInputShape =
+      inputInfo &&
+      inputInfo.shape.length === 4 &&
+      (inputChannels === 3 || inputChannels === 4);
+    const inputSize = isValidInputShape ? inputInfo.shape[1] : null;
     if (!inputSize || inputSize < 1) {
       throw new TfliteSegmentationError(
         `Unexpected model input shape: [${inputInfo?.shape?.join(',') ?? 'unknown'}] ` +
-          '(expected [batch, size, size, 4]).'
+          '(expected [batch, size, size, 3] or [batch, size, size, 4]).'
       );
     }
 
     let outputs: ArrayBuffer[];
     try {
-      const inputTensor = buildSegmenterInputTensor(pixels, imageWidth, imageHeight, inputSize);
+      const inputTensor = buildSegmenterInputTensor(
+        pixels,
+        imageWidth,
+        imageHeight,
+        inputSize,
+        inputChannels as 3 | 4
+      );
       outputs = await model.run([inputTensor.buffer as ArrayBuffer]);
     } catch (e) {
       throw new TfliteSegmentationError('Hair segmentation inference failed.', e);
@@ -138,7 +171,7 @@ export class TfliteHairSegmenter implements HairSegmenter {
     const outShape = outputInfo?.shape;
     const outHeight = outShape?.[1] ?? inputSize;
     const outWidth = outShape?.[2] ?? inputSize;
-    const outChannels = outShape?.[3] ?? 2;
+    const outChannels = outShape?.[3] ?? 6;
 
     const outputData = new Float32Array(outputs[0]);
     const expectedLength = outWidth * outHeight * outChannels;
@@ -148,7 +181,14 @@ export class TfliteHairSegmenter implements HairSegmenter {
       );
     }
 
-    return tensorToHairMask(outputData, outWidth, outHeight, outChannels);
+    return tensorToHairMask(
+      outputData,
+      outWidth,
+      outHeight,
+      outChannels,
+      MODEL_HAIR_CHANNEL,
+      MODEL_OUTPUTS_ARE_PROBABILITIES
+    );
   }
 }
 

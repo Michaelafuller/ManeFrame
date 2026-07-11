@@ -199,3 +199,32 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
 - Gate for M5 unchanged and now unblocked: user's manual segmentation
   checklist (tflite badge, hair-vs-face recolor, latency, toggle) on the
   installed preview build.
+
+### Iteration 4R-4 — ACCEPTED (2026-07-11) — release-build model loading fixed; NEW blocker found
+
+- **User's M5-gate findings (preview `ffa74b55`):** badge stuck on "mock",
+  halo-only recolor, toggle apparently inert — all one root cause: TFLite
+  never loaded in release builds. `Image.resolveAssetSource` returns an
+  Android resource name in release (vs Metro http URL in dev) that
+  fast-tflite's native AssetLoader can't open.
+- Commits `07a68f0`/`e952e18`/`c4aaae0`: expo-asset `localUri` → `{url}`
+  model source (logcat before/after proves the fix); segmentation failures
+  now surfaced (badge "tflite failed → mock" + red reason line +
+  console.warn chain); photo contain-fit; selected-color name shown next
+  to "Color" heading + swatch auto-scroll; flow 03 added. Builds: dev-client
+  `32841af6` (un-stales Metro mode), preview `b297b77f` (7 of 15 used).
+- **Reviewer verification:** independent `npm run e2e` → 4/4 pass;
+  evidence screenshots visually audited (clean, no personal content);
+  commits/logcat claims consistent.
+- **Privacy incident, handled correctly by executor:** automating the
+  library picker on the physical phone surfaced the user's real photos
+  (incl. a driver's license). Executor backed out, retained nothing,
+  rewrote flow 03 to stop at the picker entry point, and verified via
+  camera capture instead. **Standing rule going forward: automated flows
+  must never browse the device photo library; camera-capture only.**
+- **NEW BLOCKER (next remediation):** with the file finally loading, TFLite
+  fails to prepare the graph: unresolved custom op `MaxPoolingWithArgmax2D`.
+  The classic MediaPipe hair model needs MediaPipe's custom ops, which
+  vanilla TFLite (fast-tflite) doesn't register. Fix: swap to Google's
+  `selfie_multiclass_256x256.tflite` (standard-ops Image Segmenter model
+  whose class 1 is hair), after verifying its op list is custom-op-free.
