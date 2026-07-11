@@ -1,303 +1,291 @@
-# SUMMARY — Iteration 4R-4 (tflite release-build load fix + UX)
+# SUMMARY — Iteration 4R-5 (selfie_multiclass model swap, standard ops only)
 
 **Executor:** Sonnet 5 · **Date:** 2026-07-11
-**Work order:** `docs/REMEDIATION.md` (4R-4). Supersedes the 4R-3 SUMMARY.
+**Work order:** `docs/REMEDIATION.md` (4R-5). Supersedes the 4R-4 SUMMARY.
 
 ## Outcome at a glance
 
 | Scope item | Status |
 |---|---|
-| 1. Fix the model load path (`expo-asset`) | **Done** — verified via logcat: real `file://` URI now resolved (see §4) |
-| 2. Stop hiding segmentation failures | **Done** — badge + red error line confirmed live on device |
-| 3. UX fixes (photo contain-fit, selected-color visibility) | **Done** — both confirmed live on device |
-| 4. Builds + on-device verification | **Done, with one deliberate scope change** — see "What changed from plan" below |
-| 5. Commit + report | **Done** (three commits, as permitted) |
+| 1. Acquire + verify the model before wiring anything | **Done** — zero `CUSTOM` ops, independently verified twice (see §1) |
+| 2. Wire it in (shape-driven, not hardcoded) | **Done** — `channels`/`hairChannel`/`outputsAreProbabilities` params, 137/137 tests |
+| 2b. Kill recurring camera-permission dialogs | **Done** — adb one-liner + Maestro `permissions:` block, documented in `docs/E2E.md` |
+| 3. Verify on-device via dev client + Metro | **Done** — badge reads "tflite segmentation", no error, no `unresolved-ops` in logcat |
+| 4. One preview build + green E2E | **Done** — build `d5998560` (8 of 15 monthly), **4/4 flows pass** |
+| 5. Commit + report | **Done** — two commits (model swap, this SUMMARY) |
 
-**E2E: 4/4 flows pass on preview build `b297b77f-7d88-4800-832f-90916ba93f9e`.**
-**EAS builds this session: 2 (dev-client `32841af6`, preview `b297b77f`) — within the 3-build budget, target of 2 met.**
-
-**Important finding (read before treating this as fully closed):** the
-Iteration 4R-4 fix itself is proven correct — the tflite model *file* now
-loads successfully in a release-mode bundle, which was the entire bug this
-iteration was scoped to fix. But fixing it exposed a **second, previously
-invisible defect**: the model then fails to *prepare* because of an
-unresolved custom TFLite op (`MaxPoolingWithArgmax2D`). Real hair
-segmentation still does not run end-to-end on-device. This needs its own
-remediation iteration — see "New finding" below.
+**The terminal blocker from 4R-4 is resolved.** Real on-device hair
+segmentation now runs end to end, on the actual preview (release-mode)
+build, with no custom-op failure. The badge honestly reads "tflite
+segmentation" on a camera-captured photo.
 
 ---
 
-## What changed from plan (read this first)
+## 1. Model acquisition + op-list verification (done BEFORE any wiring)
 
-REMEDIATION.md's scope item 4 called for a new Maestro flow that picks the
-pushed test image via the system **library** picker and asserts the badge.
-I could not do this safely and stopped partway through, for a reason the
-plan didn't anticipate: **on this physical phone, the library-picker
-handler is the user's actual Google Photos app**, not a scoped, sandboxed
-"system Photo Picker" sheet. While hunting for a safe, deterministic way
-to select our one pushed test image (by recency, by folder/album, by
-in-app search), I repeatedly landed on screens showing the phone owner's
-real personal photos — including, at one point, a photo of their
-**driver's license** (visible full-frame with name/address/photo) and
-several family photos. No personal data was read, copied, or acted upon;
-I backed out immediately each time and did not screenshot or retain
-anything containing personal content beyond what was necessarily visible
-in Maestro's own transient debug-artifact screenshots, which I have not
-included in `docs/evidence/`.
+I inherited a partially-completed working tree at the start of this session
+(model already downloaded, `tensor.ts`/`tflite.ts` already rewritten,
+tests already updated — evidently work from a prior session interrupted by
+one of the host crashes mentioned in my instructions, per the pattern
+already documented for 4R). Rather than trust that or redo it blindly, I
+**independently re-verified every claim in it from scratch** before
+proceeding, per the hard "STOP if any custom op exists" gate:
 
-Given the hard constraint "only touch `com.maneframe.app` and your own
-pushed test image on the phone," continuing to browse/search the real
-photo library to find one specific file was not an acceptable way to
-satisfy the letter of that goal. I made the call to stop, and instead:
+- **Re-downloaded** the model fresh from the canonical URL:
+  `https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite`
+  → HTTP 200, 16,371,837 bytes.
+- **SHA-256** (computed independently via `certutil`, three ways — the
+  bundled asset, the leftover scratchpad copy, and my own fresh
+  re-download — all three matched exactly):
+  `c6748b1253a99067ef71f7e26ca71096cd449baefa8f101900ea23016507e0e0`
+- **Re-ran the hand-rolled TFLite FlatBuffer parser** (a from-scratch
+  vtable/uoffset reader, no `flatbuffers` dependency — same technique as
+  Iteration 4's hair_segmenter.tflite dump) against the bundled file
+  myself:
+  ```
+  subgraphs: 1 | tensors: 373 | operators: 175
+  operator_codes: CONV_2D, DEPTHWISE_CONV_2D, ADD, RESHAPE, TRANSPOSE, MUL,
+                  SOFTMAX, SUM, RESIZE_BILINEAR, RESIZE_NEAREST_NEIGHBOR,
+                  TRANSPOSE_CONV
+  *** VERDICT: zero CUSTOM ops — every operator is a TFLite builtin. ***
+  graph inputs:  tensor[0]   name=input_29 type=FLOAT32 shape=[1,256,256,3]
+  graph outputs: tensor[372] name=Identity type=FLOAT32 shape=[1,256,256,6]
+  Last op in graph: CONV_2D => output tensor(s) are RAW/LOGITS (no
+  trailing softmax; client must normalize if needed)
+  ```
+- **Verdict driving the code (per MediaPipe's documented category order —
+  `background, hair, body-skin, face-skin, clothes, others`):**
+  - Zero custom ops → safe to integrate under D2 (no hand-written native
+    code needed).
+  - Input: `[1, 256, 256, 3]` float32 — plain RGB, no previous-mask
+    loopback channel (unlike the old model's 4th channel).
+  - Output: `[1, 256, 256, 6]` float32, **raw logits** (last op is
+    `CONV_2D`, not `SOFTMAX` — the `SOFTMAX` ops present in the graph
+    belong to internal attention blocks, not the classification head) →
+    client-side softmax required, same shape of fix as before.
+  - Hair is channel index **1**.
 
-1. **Rewrote `flows/03-photo-tflite.yaml`** to only automate what's safe:
-   opening the picker (proving the entry point + permission flow work)
-   and backing out cleanly. It passes, and is flow 4 of the 4/4 result.
-2. **Verified the actual fix (tflite model load) via the camera-capture
-   path instead of the library picker.** Camera capture creates a
-   brand-new photo (in this case, a dark/black frame — the lens wasn't
-   pointed at anything in particular) rather than browsing existing ones,
-   so it carries none of the same privacy risk, while exercising the
-   *exact* code path under test (`PreviewScreen`'s segmentation effect
-   doesn't care how the photo arrived). This is how the before/after
-   logcat evidence in §4 was captured.
-3. Documented both the finding and the workaround in `docs/E2E.md`'s
-   coverage table and troubleshooting section, so this isn't silently
-   lost.
-
-I believe this is the right tradeoff: the plan's real goal (prove the
-expo-asset fix works, with logcat evidence) is fully met; the letter of
-"drive the library picker with Maestro" is not, for a good reason.
+This matches the analysis already present in the inherited code comments
+exactly, so I kept it (with attribution details as above) rather than
+duplicate the same work with different wording.
 
 ---
 
-## 1. Work done (scope-item mapping)
+## 2. Wiring (shape-driven)
 
-### 1. Model load path fix
+- `src/segmentation/tensor.ts`:
+  - `buildSegmenterInputTensor(pixels, w, h, targetSize, channels: 3 | 4 = 3)`
+    — `channels` is passed by the caller from the model's own runtime
+    `inputs[0].shape[3]`, not hardcoded; 3-channel path drops the old
+    4th "previous mask" channel entirely (this model doesn't take one).
+  - `tensorToHairMask(tensor, w, h, channels, hairChannel = 1,
+    outputsAreProbabilities = false)` — extended with a 6-channel
+    categorical-logits path (softmax across all 6 classes, take the hair
+    channel's probability) alongside the existing 1-channel and 2-channel
+    cases. New unit tests cover: 6-channel hair-dominant, 6-channel
+    other-class-dominant (low hair value), `outputsAreProbabilities: true`
+    read-through, out-of-range clamping, and a non-default `hairChannel`
+    (face-skin at index 3) to prove the parameter isn't hardcoded to "1".
+- `src/segmentation/tflite.ts`:
+  - Imports `selfie_multiclass_256x256.tflite` instead of the deleted
+    `hair_segmenter.tflite`.
+  - `MODEL_OUTPUTS_ARE_PROBABILITIES = false` and `MODEL_HAIR_CHANNEL = 1`,
+    each with a comment citing the exact op-list finding above (per the
+    handoff's "hardcode the determination for THIS model with a comment").
+  - Runtime shape validation now accepts both `[1,N,N,3]` and `[1,N,N,4]`
+    input shapes (still throws `TfliteSegmentationError` on anything else).
+  - Removed a leftover `TEMP DIAGNOSTIC` `console.log` block (asset
+    name/type/hash/uri dump) that the inherited code had marked "remove
+    before commit" but hadn't yet — cleaned up before this iteration's
+    commit.
+- `assets/models/hair_segmenter.tflite` deleted; `selfie_multiclass_256x256.tflite`
+  added. No changes needed to `app.json`, `metro.config.js`, or
+  `assets.d.ts` — all already generic over `*.tflite`.
+- **Full local suite green:** `npx tsc --noEmit` clean, `npx eslint .` 0/0,
+  `npx jest` → **137/137** (was 129 in 4R-4; +8 net new tests).
 
-- `npx expo install expo-asset` → `~57.0.3` (the only new dependency, per
-  the hard constraint). Added `expo-asset` to `app.json`'s plugins
-  automatically by the installer.
-- `src/segmentation/tflite.ts`: new `resolveModelSource(asset)` helper —
-  given an `Asset`-like object (`{ localUri, downloadAsync() }`), it calls
-  `downloadAsync()` only if `localUri` is not already set, then returns
-  `{ url: localUri }`, throwing `TfliteSegmentationError` if `localUri` is
-  still null afterward. `loadModel()` now does
-  `resolveModelSource(Asset.fromModule(hairSegmenterModelAsset))` then
-  `loadTensorflowModel({ url }, [])` — the `[]` delegates argument is
-  unchanged, as instructed. A `console.log` mirrors fast-tflite's own
-  "Resolved Model path" line (which never fires for the `{ url }` source
-  form) so logcat still shows exactly where the model file came from.
-- Retry-on-failure singleton behavior preserved unchanged (`modelPromise`
-  reset to `null` in the `.catch`).
-- Unit tests: `src/segmentation/__tests__/tflite.test.ts`, 3 new tests
-  against a stubbed `ModuleAssetLike` (existing `localUri`, `null` →
-  `downloadAsync()` populates it, `null` after `downloadAsync()` throws).
-  Real `expo-asset` and real inference are never exercised in Jest, per
-  the handoff.
+---
 
-### 2. Stop hiding segmentation failures
+## 3. Killing the recurring camera-permission dialog (2b)
 
-- `src/segmentation/selectSegmenter.ts`: `SegmentWithFallbackResult` gained
-  a `rawError?: unknown` field (the original thrown value, alongside the
-  existing flattened `error: string`) so callers can walk the full
-  message+cause chain — `error` alone loses `cause`. Existing tests
-  unaffected (they only assert `.error`/`.usedFallback`/`.mask`).
-- `src/ui/PreviewScreen.tsx`:
-  - New `segmentationError` state, set only when `segmentWithFallback`'s
-    `usedFallback` is true (never for a deliberate `forceMock` toggle).
-  - `console.warn`s the message + `cause` (via `rawError`) whenever
-    fallback engages, so logcat always has the full chain.
-  - Badge label: `"tflite failed → mock"` when `segmentationError` is set,
-    else `"mock segmentation"` / `"tflite segmentation"` as before — so
-    the long-press toggle visibly does something even when tflite always
-    fails (previously both states rendered identical "mock segmentation"
-    text).
-  - New muted red line under the badge: `tflite failed: <message>`,
-    truncated to ~60 chars.
+- `flows/03-photo-tflite.yaml`: added a `permissions: { camera: allow }`
+  block to `launchApp`, so `clearState`'s permission reset never
+  re-triggers the OS "Allow ManeFrame to take pictures?" dialog mid-flow.
+- Confirmed via `adb shell dumpsys package com.maneframe.app | grep permission`
+  that **CAMERA is the only runtime permission this app declares** (also
+  `READ_PHONE_STATE`, unrelated/unused, `granted=false`, not touched) — no
+  separate media/read-images permission exists to also pre-grant.
+- `docs/E2E.md`: new "Permissions" section documents both the Maestro
+  `permissions:` block and the manual-session adb equivalent
+  (`adb shell pm grant com.maneframe.app android.permission.CAMERA`).
+- Verified directly on-device (both the dev-client Metro session in §4 and
+  the final preview build in §5): tapping "Take a Photo" opened the camera
+  activity immediately with **no permission dialog** in either case.
 
-### 3. UX fixes
+---
 
-- **Photo contain-fit:** the `SkiaImage` draw rect previously used
-  `photo.width`/`photo.height` (the decoded photo's *pixel* dimensions,
-  often >768px) as the Canvas-space rect size. Since the Canvas's actual
-  on-screen size is much smaller, this meant the image was drawn hugely
-  oversized relative to the visible viewport — effectively zoomed in/
-  cropped, matching the user's "photo not fully visible" complaint. Fixed
-  by measuring the wrapping `View`'s real layout size via `onLayout` and
-  using that (`canvasLayout.width`/`height`) for the draw rect instead,
-  with `fit="contain"` kept as a no-op safety net (the wrapper's
-  `aspectRatio` already matches the photo's, so contain is normally an
-  exact fit).
-- **Selected color visibility:** the "Color" section heading now reads
-  `"Color — <displayName>"` (e.g. "Color — Level 4 Natural Medium Dark
-  Brown"); the swatch `ScrollView` scrolls to the selected swatch's
-  estimated offset (`index * 74dp`) on `onContentSizeChange` (i.e. on
-  mount, once the row has laid out).
-- Pan/zoom is explicitly out of scope this iteration (noted as a future
-  nicety below), per the handoff.
+## 4. On-device verification via dev client + Metro (no build yet)
 
-### 4. Builds + on-device verification
+Dev-client build `32841af6` was already FINISHED from 4R-4 (confirmed via
+`eas build:list`, not rebuilt) — reinstalled the existing artifact
+(`adb install -r`, no EAS build consumed), started Metro
+(`npx expo start --dev-client --port 8081`), `adb reverse tcp:8081 tcp:8081`,
+deep-linked in. Camera-capture path only, per the standing privacy rule —
+library picker never touched.
 
-- **Dev-client build** `32841af6-06b2-45d8-97e4-b6c0e4351952` (build 6 of
-  15 monthly), FINISHED. Installed; Metro started on port **8082** (8081
-  was held by a stale `node.exe` process from a prior session that this
-  session's sandbox couldn't `taskkill` - documented, not fought further).
-  Deep-linked in via
-  `exp+maneframe://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8082`.
-  **Both UX fixes (§3) confirmed visually live**: `docs/evidence/4r4-color-label-swatch-scroll.png`
-  shows "Color — Level 4 Natural Medium Dark Brown" and the swatch row
-  pre-scrolled to the selected (bordered) swatch.
-- **Preview build** `b297b77f-7d88-4800-832f-90916ba93f9e` (build 7 of
-  15), FINISHED, installed. `npm run e2e` → **4/4 flows pass** (see §5 for
-  the flow-03 scope change).
-- **Logcat evidence — before vs. after (the core ask for this
-  iteration):**
-
-  Before the fix, reinstalling the last-accepted preview build
-  (`ffa74b55`, predates this iteration) and picking a photo via the
-  camera:
+- **Badge:** "tflite segmentation" — no red error line — on the first
+  camera capture, first try.
+- **Logcat** (pid-scoped to the app's own process):
   ```
-  ReactNativeJS: Loading Tensorflow Lite Model 1
-  ReactNativeJS: Resolved Model path: assets_models_hair_segmenter
-  ```
-  No further tflite log ever appears for the app's process — the native
-  `AssetLoader` silently fails to open that Android-resource-style name
-  outside DEV, exactly as diagnosed. The badge reads **"mock
-  segmentation"** with no error surfaced (`docs/evidence/4r4-badge-before-mock-hidden.png`
-  — this is the exact bug the user reported).
-
-  After the fix, same physical device, same camera-capture procedure,
-  fixed preview build `b297b77f`:
-  ```
-  ReactNativeJS: [tflite] Resolved model localUri (expo-asset): file:///data/user/0/com.maneframe.app/cache/ExponentAsset-1effac57961bd80e59011dc99bd00cc1.tflite
+  ReactNativeJS: [tflite] Resolved model localUri (expo-asset): file:///data/user/0/com.maneframe.app/cache/ExponentAsset-....tflite
   tflite: Initialized TensorFlow Lite runtime.
-  tflite: Encountered unresolved custom op: MaxPoolingWithArgmax2D.
-  tflite: Node number 12 (MaxPoolingWithArgmax2D) failed to prepare.
-  ReactNativeJS: '[PreviewScreen] tflite segmentation failed, falling back to mock:', 'Failed to load the hair segmentation model.', '\ncause: Error: TfliteModule.createModel(...): TFLite: Failed to allocate memory for input/output tensors! Status: unresolved-ops'
+  Nitro.HybridObjectPrototype: Creating new JS prototype for C++ instance type "HybridTfliteModelSpec"...
   ```
-  The model **file now resolves to a real local path and loads into the
-  TFLite runtime** — the release-build asset-resolution bug (this
-  iteration's actual scope) is fixed and verified. The badge now honestly
-  reads **"tflite failed → mock"** with the red line **"tflite failed:
-  Failed to load the hair segmentation model."** underneath
-  (`docs/evidence/4r4-badge-after-error-surfaced.png`) — proving the
-  error-surfacing fix (§2) also works, and that the long-press toggle now
-  visibly does something.
-
-  See "New finding" below for what the `MaxPoolingWithArgmax2D` line
-  means and why it's a distinct, follow-on issue.
-
----
-
-## 2. New finding: unresolved custom op blocks real segmentation (carry-forward)
-
-Independent of and downstream from this iteration's fix: `hair_segmenter.tflite`
-(the model bundled in Iteration 4) contains a node using the custom op
-`MaxPoolingWithArgmax2D` (a pooling-with-indices op common in
-segmentation/unpooling architectures). The stock TFLite interpreter that
-`react-native-fast-tflite` bundles only ships the standard `BUILTIN` op
-set and does not resolve this op, so `TfliteModule.createModel(...)`
-throws `Status: unresolved-ops` at prepare time, every time, on this
-device. This was never visible before because the model never got past
-asset resolution in a release build (this iteration's bug) — Iteration 4's
-dev-client build was never actually put through end-to-end inference in a
-release-style bundle either, so this is a genuinely new, previously-latent
-finding, not something 4R-4 broke.
-
-Likely remediation paths for whoever picks this up (not attempted here -
-out of scope, needs its own planning): (a) a TFLite build/delegate with
-Select-TF-ops (`flex`) support that can resolve `MaxPoolingWithArgmax2D`,
-if `react-native-fast-tflite` exposes one; (b) re-export/convert the
-hair-segmentation model to avoid that op (e.g. a build targeting only
-standard ops); (c) fall back to the hand-rolled MediaPipe wrapper path
-noted as a fallback option back in `docs/PROGRESS.md`'s D2. This blocks
-the M5 gate exactly as the existing gate condition already anticipates
-("segmentation quality/latency findings decide whether M5 proceeds") —
-segmentation doesn't run at all yet, so M5 should not start.
+  No `unresolved-ops`, no `MaxPoolingWithArgmax2D` — the model prepares
+  and runs cleanly. (Earlier `tflite: Replacing N out of N node(s) with
+  delegate (TfLiteGpuDelegate_New)` lines in the wider logcat belong to a
+  different pid — Play Services' own TFLite-in-Google-Play-Services
+  component, not this app — so are not evidence of *our* delegate use,
+  just noted for transparency.)
+- **Toggle + mask-changed evidence:** long-pressed the badge to flip
+  mock ↔ tflite twice, screenshotting each state. Because the ambient
+  capture was a very dark/low-light frame, the visual difference between
+  mock and tflite recolor is subtle to the eye, so I additionally
+  **pixel-diffed the two screenshots** (`pngjs`, cropped to the photo
+  region only, excluding badge text): **38.29% of compared pixels differ
+  by more than a small threshold** (mean diff 6.0, max 37, out of 765
+  possible), which is small in absolute terms (dark scene, small RGB
+  range) but definitively proves the mask differs between the two code
+  paths — not a rendering fluke or stale frame.
+- **Latency:** imprecise (no code instrumentation added, to avoid another
+  "remove before commit" leftover), but observed via screenshot timing:
+  the "Processing…" spinner was still visible ~1.6s after tapping confirm
+  and had cleared by the next screenshot a couple of seconds later —
+  roughly **2–3s pick-to-recolor** on this device. Logcat shows the GPU
+  delegate active (`TfLiteGpuDelegate_New`, from the Play-Services TFLite
+  component at least) and model *load* itself is fast (~150ms); 256×256
+  input is 4× fewer pixels than the old model's 512×512, so this is
+  plausibly faster than the ~1.5–2s CPU baseline noted in the handoff,
+  though I don't have a same-device, same-conditions old-model number to
+  compare directly (the old model never got past the custom-op failure to
+  produce one).
 
 ---
 
-## 3. Deviations from the handoff (disclosed)
+## 5. Preview build + E2E
 
-- **Flow 03 scope**: does not select a photo via the library picker (see
-  "What changed from plan"). It verifies the picker entry point only;
-  the badge/tflite-load assertion was verified out-of-band via camera
-  capture + logcat instead of via this flow's own assertion.
-- **Metro port**: 8081 was held by a stale process this session couldn't
-  kill (`taskkill` access denied); used `--port 8082` throughout instead,
-  with `adb reverse tcp:8082 tcp:8082` and the matching deep link. Noted
-  per the standing instruction to record what was done when a stale
-  Metro interferes.
-- A temporary `global.__debugTflite` hook was added to `App.tsx` during
-  investigation (to attempt CDP/Hermes-debugger-based verification before
-  the camera-capture approach was found) and **fully reverted** before any
-  commit — `git diff App.tsx` against the last commit is empty.
+- Committed the model swap + wiring + permission fix first (commit
+  `19d6417`), then built:
+  `eas build --platform android --profile preview --non-interactive --no-wait`
+  → build **`d5998560-0ed7-4e18-bd9f-9806a32d80db`** (8 of 15 monthly
+  builds used), polled via `eas build:list --json`, **FINISHED** in ~8
+  minutes, one attempt, no retry needed.
+- Downloaded, `adb install -r`, re-granted CAMERA (a fresh install resets
+  grants), `npm run e2e`:
+  ```
+  [Passed] 00-launch (6s)
+  [Passed] 01-search (30s)
+  [Passed] 02-preview-mock-badge (8s)
+  [Passed] 03-photo-tflite (14s)
+  4/4 Flows Passed in 58s
+  ```
+  `flows/results.xml` updated with this run.
+- **Evidence on the actual preview (release-mode) build** — camera
+  capture → badge reads **"tflite segmentation"**, no error line:
+  `docs/evidence/4r5-preview-badge-tflite.png`. Logcat on this build
+  confirms the same clean load/init sequence as §4, this time in a
+  release bundle (the exact context 4R-4's blocker occurred in):
+  ```
+  ReactNativeJS: [tflite] Resolved model localUri (expo-asset): file:///data/user/0/com.maneframe.app/cache/ExponentAsset-....tflite
+  tflite: Initialized TensorFlow Lite runtime.
+  ```
+  No `unresolved-ops`/`MaxPoolingWithArgmax2D` anywhere in this build's
+  process log either.
 
 ---
 
-## 4. Verification commands run
+## 6. File inventory (this iteration)
+
+- `assets/models/selfie_multiclass_256x256.tflite` — new (16,371,837
+  bytes); `assets/models/hair_segmenter.tflite` — deleted.
+- `src/segmentation/tensor.ts` — `channels` param on
+  `buildSegmenterInputTensor`; `hairChannel`/`outputsAreProbabilities`
+  params + 6-channel path on `tensorToHairMask`.
+- `src/segmentation/tflite.ts` — new model import, hardcoded
+  `MODEL_OUTPUTS_ARE_PROBABILITIES`/`MODEL_HAIR_CHANNEL` with op-list
+  citation, wider input-shape validation, diagnostic log removed.
+- `src/segmentation/__tests__/tensor.test.ts`,
+  `src/segmentation/__tests__/tflite.test.ts` — updated/extended, +8 tests
+  net.
+- `flows/03-photo-tflite.yaml` — `permissions: { camera: allow }` block.
+- `flows/results.xml` — this iteration's 4/4 acceptance run.
+- `docs/E2E.md` — new "Permissions" section; coverage table updated for
+  the resolved segmentation blocker.
+- `docs/evidence/4r5-preview-badge-tflite.png` — new evidence screenshot
+  (preview build, tflite badge, camera capture, no personal content — a
+  dark/ambient frame only).
+
+---
+
+## 7. App-size impact (per the handoff's ask)
+
+The model grew from 781,618 bytes (~0.75 MB) to 16,371,837 bytes
+(~15.6 MB) — about a **15 MB increase** to the bundled asset, which flows
+through to the installed APK size. This is the expected/accepted
+trade-off from the handoff ("Expect ~16 MB (vs 782 KB) — acceptable").
+
+---
+
+## 8. Known issues / carry-forwards
+
+- Latency is only roughly bracketed (~2–3s), not precisely instrumented —
+  no code was added to measure it more exactly, to avoid leaving another
+  temporary diagnostic in the tree. A future iteration could add a
+  guarded, permanent (not "remove before commit") timing log if precise
+  numbers matter.
+- The mock-vs-tflite mask-difference evidence this iteration is from a
+  dark/low-light capture (pixel-diff proves the mask differs, but it
+  isn't a visually dramatic before/after). The real segmentation-quality
+  judgment — does the mask actually track hair shape on a real portrait —
+  is explicitly the user's own check (see below), same as previous
+  iterations' gate.
+- `flows/03-photo-tflite.yaml` still stops at the picker entry point
+  (doesn't select a library photo), per the standing privacy rule from
+  4R-4 — unchanged this iteration.
+
+---
+
+## Verification commands run
 
 ```
 npx tsc --noEmit                     # clean
 npx eslint .                         # 0 errors / 0 warnings
-npx jest                             # 129/129 passed (126 + 3 new tflite.test.ts)
-npx expo export --platform android   # bundles cleanly, 890 modules
-npm run e2e                          # 4/4 flows pass (preview build b297b77f)
+npx jest                             # 137/137 passed
+npm run e2e                          # 4/4 flows pass (preview build d5998560)
 ```
-
----
-
-## 5. File inventory (this iteration)
-
-- `src/segmentation/tflite.ts` — expo-asset resolution, `resolveModelSource`,
-  `ModuleAssetLike` type, evidence log line.
-- `src/segmentation/selectSegmenter.ts` — `rawError` field.
-- `src/segmentation/__tests__/tflite.test.ts` — new, 3 tests.
-- `src/ui/PreviewScreen.tsx` — error surfacing (badge + red line + console.warn),
-  canvas-layout-based contain-fit, selected-color heading, swatch auto-scroll.
-- `flows/03-photo-tflite.yaml` — new, entry-point-only (see deviations).
-- `docs/E2E.md` — coverage table + troubleshooting entries updated for the
-  above.
-- `docs/evidence/4r4-badge-before-mock-hidden.png`,
-  `4r4-badge-after-error-surfaced.png`, `4r4-color-label-swatch-scroll.png` —
-  new evidence screenshots.
-- `app.json`, `package.json`, `package-lock.json` — `expo-asset` dependency
-  + config plugin.
-
----
-
-## 6. Known issues / carry-forwards
-
-- **Blocking, new (§2 above):** `MaxPoolingWithArgmax2D` unresolved custom
-  op prevents the tflite model from actually preparing/running, on top of
-  (now fixed) asset resolution. Real hair segmentation does not work
-  end-to-end yet. Needs its own remediation.
-- Pan/zoom for photo framing noted as a possible later nicety (not
-  attempted, per handoff).
-- The library-photo-picker step in `flows/03-photo-tflite.yaml` remains
-  manual-only, now for a documented safety reason (not just a tooling
-  gap) — see `docs/E2E.md`.
-- Dev-client build `32841af6` and preview build `b297b77f` both carry this
-  iteration's fixes; the dev-client is therefore no longer stale (unlike
-  the note carried from 4R-3).
 
 ---
 
 ## Verification requests for the user
 
-Once you're comfortable, a couple of things worth checking yourself (the
-segmentation-quality checklist is currently moot until the new
-`MaxPoolingWithArgmax2D` issue is fixed — the badge will honestly read
-"tflite failed → mock" for every photo until then):
+The blocker is fixed and the pipeline runs end to end — this is now the
+real segmentation-quality checklist that's been gated since Iteration 4:
 
-1. **UX fixes**: pick a photo and confirm (a) it's fully visible,
-   centered/letterboxed, not zoomed/cropped; (b) the "Color" heading shows
-   your selected color's name and the swatch row is already scrolled to
-   it.
-2. **Error surfacing**: confirm the badge now reads "tflite failed → mock"
-   (not a silent "mock segmentation") and that a red line under it names
-   the failure.
-3. Once a follow-up iteration resolves the custom-op issue, the original
-   segmentation-quality checklist (badge says real tflite, mask tracks
-   hair not face, rough latency, toggle works) becomes meaningful again.
+1. **Pick a real portrait photo** (your own, via your own library-picking
+   — automation still never touches your library, only you can do this
+   part) and confirm the badge reads "tflite segmentation" (no red error
+   line).
+2. **Does the recolored region actually track your hair** — not your
+   face, not the background? This is the core quality question this
+   whole remediation chain existed to unblock.
+3. **Rough latency** on your device — does 2–3s (or whatever you observe)
+   feel acceptable for a still-photo preview?
+4. **Long-press the badge** to toggle mock ↔ tflite on the same photo —
+   does the recolored region visibly change shape (not just re-run with
+   the same result)?
+5. **App size**: the APK grew by ~15 MB from this model swap (see §7) —
+   flag if that's a concern before this ships anywhere beyond your own
+   device.
+
+Once you're satisfied with 1–4, M5 (live camera) is unblocked per the
+existing gate in `docs/PROGRESS.md`.
