@@ -1,345 +1,303 @@
-# SUMMARY — Iteration 4R-2 (complete the interrupted 4R: preview build + green E2E)
+# SUMMARY — Iteration 4R-4 (tflite release-build load fix + UX)
 
 **Executor:** Sonnet 5 · **Date:** 2026-07-11
-**Supersedes the Iteration-4 SUMMARY.md** (that report described the original
-Iteration 4 EAS dev-client build; this report covers the 4R-2 remediation:
-finishing and verifying the interrupted 4R session's work).
+**Work order:** `docs/REMEDIATION.md` (4R-4). Supersedes the 4R-3 SUMMARY.
 
 ## Outcome at a glance
 
 | Scope item | Status |
 |---|---|
-| 1. Sanity-check inherited tree | **Done** |
-| 2. Metro-connected smoke on already-installed dev client | **Done — passed** |
-| 3. Fresh preview build | **Done** |
-| 4. Acceptance gate: green E2E on preview build | **BLOCKED — 2/3 flows pass.** `00-launch` fails on a real, reproducible on-device rendering defect (not a flow bug). STOPPING per the remediation's explicit instruction rather than attempting an unauthorized fix. See "Known issues" below. |
-| 5. Commit + report | **Done** (two commits, as permitted) |
+| 1. Fix the model load path (`expo-asset`) | **Done** — verified via logcat: real `file://` URI now resolved (see §4) |
+| 2. Stop hiding segmentation failures | **Done** — badge + red error line confirmed live on device |
+| 3. UX fixes (photo contain-fit, selected-color visibility) | **Done** — both confirmed live on device |
+| 4. Builds + on-device verification | **Done, with one deliberate scope change** — see "What changed from plan" below |
+| 5. Commit + report | **Done** (three commits, as permitted) |
 
-**E2E result: 2/3 flows passing on the preview build** (`01-search`,
-`02-preview-mock-badge` pass; `00-launch` fails on a genuine app defect).
+**E2E: 4/4 flows pass on preview build `b297b77f-7d88-4800-832f-90916ba93f9e`.**
+**EAS builds this session: 2 (dev-client `32841af6`, preview `b297b77f`) — within the 3-build budget, target of 2 met.**
 
----
-
-## 1. Scope-item mapping (what was done)
-
-### 1. Sanity-check the inherited tree
-
-Read `flows/00-launch.yaml`, `flows/01-search.yaml`,
-`flows/02-preview-mock-badge.yaml`, `docs/E2E.md`, the `SearchScreen.tsx`
-diff, and `patches/@shopify+react-native-skia+2.6.2.patch`. Everything was
-coherent and complete — no half-finished state found beyond what the
-REMEDIATION's "state reconstruction" section already described. No rewrites
-needed.
-
-Verification suite, all clean:
-
-```
-npm install                                    → patch-package applied cleanly
-npm run typecheck && npm run lint && npm test  → clean / clean / 126 passed
-npx expo export --platform android             → clean, 881 modules
-```
-
-### 2. Metro-connected smoke on the already-installed dev client
-
-- Started Metro (`npx expo start --dev-client`) in the background, ready at
-  `http://localhost:8081`.
-- `adb reverse tcp:8081 tcp:8081`, then deep-linked the dev client
-  (`exp+maneframe://expo-development-client/?url=...`).
-- **Result: PASS.** The Search screen loaded fully — title, search box,
-  catalog results, both tabs — with no redbox. The Iteration-4R Skia patch
-  is working: without it, this would have thrown at module-load time before
-  any UI rendered (per the patch's own comment and `flows/00-launch.yaml`'s
-  header comment). Screenshot: `docs/evidence/metro-smoke-2.png`.
-- Ran `npm run e2e` in this mode too (informational only, not the
-  acceptance gate, per the remediation's own instruction). All 3 flows
-  failed with "element not found" — expected: Maestro's `launchApp`
-  reopens the dev-client launcher screen, not the Metro-deep-linked bundle.
-  This is now documented in `docs/E2E.md`'s "Two modes" section and a new
-  troubleshooting row.
-
-### 3. Fresh preview build
-
-- Committed first (see section 5), then:
-  `eas build --platform android --profile preview --non-interactive --no-wait`,
-  polled `eas build:list` every 30s.
-- **Build finished successfully, first attempt, no retry** — 1 of 2
-  permitted builds this session, 4th of 15 this month.
-  - Build ID: `6121bda2-b033-4e94-9d54-f473e0b4716b`
-  - Build page: https://expo.dev/accounts/michaelafuller/projects/maneframe/builds/6121bda2-b033-4e94-9d54-f473e0b4716b
-  - APK: https://expo.dev/artifacts/eas/ugmea4MtCdiJXWQ5WJPduV9RDJzWC5tFOVKglDxX-us.apk
-  - Started 2026-07-11T06:35:46Z, finished 2026-07-11T06:46:14Z (~10m22s).
-  - Git commit built: `a285532` (the first Iteration-4R commit, matches
-    exactly what was intended to be built).
-  - Fingerprint `e2658baa...` — differs from the earlier stale
-    `0cb773cb` preview build (built before the nitro fix), confirming this
-    is a genuinely fresh build reflecting the fix.
-- Downloaded (141.5 MB) and `adb install -r`'d over the dev-client build
-  (same `applicationId`, expected replacement).
-- Launched: **opens straight into ManeFrame, no dev-launcher screen.**
-  Screenshot: `docs/evidence/preview-launch.png`.
-
-### 4. Acceptance gate: green E2E on the preview build
-
-First run: `npm run e2e` → **2 flows failed** (`00-launch`, `01-search`),
-`02-preview-mock-badge` passed. Investigated both failures on-device rather
-than assuming either was a real app regression:
-
-- **`01-search` — a real flow-authoring bug, fixed.** The flow's second
-  query, `"warm red"`, has no length/fringe/texture/attribute hint.
-  `searchHairstyles` (`src/search/scorer.ts`) only returns "all styles
-  unranked" when the *entire* query is empty; a color-only query takes the
-  scored path, every style scores exactly 0, and the function's documented
-  behavior ("zero-score results are omitted") drops all of them — so **no**
-  hairstyle cards, and therefore **no** color swatches, ever render.
-  Confirmed on-device: typing "warm red" alone renders "0 hairstyles · 4
-  colors" / "No matching hairstyles.". Fixed the flow to use the canonical,
-  unit-tested query `"warm red shoulder-length bob"`
-  (`scorer.test.ts` canonical query 4), which guarantees a style match.
-  This bug would have failed identically on *any* build, dev or preview —
-  it was never a preview-build defect. Re-ran: **passes.**
-- **`00-launch` — a real, reproducible app defect. STOPPED per the
-  remediation's explicit instruction; no fix attempted.** See "Known
-  issues" below for full investigation and evidence.
-
-Final acceptance run against the preview build (`flows/results.xml`,
-archived verbatim):
-
-```xml
-<?xml version='1.0' encoding='UTF-8'?>
-<testsuites>
-  <testsuite name="Test Suite" device="0A131FDD4006VE" tests="3" failures="1" time="60.0">
-    <testcase id="00-launch" name="00-launch" classname="00-launch" file="flows\00-launch.yaml" time="24.0" status="ERROR">
-      <failure>Assertion is false: "ManeFrame" is visible</failure>
-    </testcase>
-    <testcase id="01-search" name="01-search" classname="01-search" file="flows\01-search.yaml" time="29.0" status="SUCCESS"/>
-    <testcase id="02-preview-mock-badge" name="02-preview-mock-badge" classname="02-preview-mock-badge" file="flows\02-preview-mock-badge.yaml" time="7.0" status="SUCCESS"/>
-  </testsuite>
-</testsuites>
-```
-
-`docs/E2E.md` updated: added a "Two modes" section (dev-client+Metro for
-iteration vs. preview standalone for acceptance) with the `adb reverse`
-deep-link recipe, a troubleshooting row for "all flows time out at launch →
-you're on the dev-client launcher", a row explaining the color-only-query
-empty-result behavior, and the coverage table now has a "Last acceptance
-run" column reflecting actual pass/fail status instead of just
-"Automated? Yes/No".
-
-### 5. Commit + report
-
-Two commits, as permitted:
-
-1. `a285532` "Iteration 4R: fix Nitro launch crash, Skia reanimated patch,
-   Maestro E2E" — everything inherited from the crashed session (nitro dep,
-   Skia patch, flow files, E2E.md, testID) plus the Metro-smoke evidence,
-   committed **before** the EAS build so the build's recorded commit
-   matches its content.
-2. `fbc0697` "Iteration 4R: e2e fixes from device run" — the `01-search`
-   flow fix, updated `results.xml`, updated `docs/E2E.md`, and the
-   `00-launch` defect evidence (screenshot, hierarchy dump, logcat).
-
-`docs/HANDOFF.md`, `docs/PROGRESS.md`, and `.claude/` were not edited by
-this executor (their pre-existing uncommitted state, made by the planner
-before the crash, was carried into commit 1 unmodified — "commit everything
-inherited" per the remediation, not "edit these files").
+**Important finding (read before treating this as fully closed):** the
+Iteration 4R-4 fix itself is proven correct — the tflite model *file* now
+loads successfully in a release-mode bundle, which was the entire bug this
+iteration was scoped to fix. But fixing it exposed a **second, previously
+invisible defect**: the model then fails to *prepare* because of an
+unresolved custom TFLite op (`MaxPoolingWithArgmax2D`). Real hair
+segmentation still does not run end-to-end on-device. This needs its own
+remediation iteration — see "New finding" below.
 
 ---
 
-## 2. What the crashed session had done vs. what this session added
+## What changed from plan (read this first)
 
-| | Crashed 4R session (inherited, uncommitted) | This session (4R-2) |
-|---|---|---|
-| nitro-modules dep + patch-package | Added | Verified, committed |
-| Skia reanimated patch | Written | Verified working on-device (Metro smoke), committed |
-| Maestro flows + `docs/E2E.md` | Written | Fixed `01-search`'s flawed query; documented two modes + troubleshooting; committed |
-| `results.xml` | 3/3 failures (against dev-launcher, no Metro — a red herring, not a broken app) | 2/3 → 1/3 real failures after investigation (see below) |
-| EAS builds | `b2445fad` dev/broken, `0cb773cb` preview/stale, `68834a2f` dev/fixed | `6121bda2` preview/fixed (fresh, matches committed source) |
-| On-device verification | None beyond "dev-launcher shows, no crash" | Full Metro-connected smoke (pass), full preview-build smoke (pass), full e2e acceptance run (2/3 pass), root-caused both e2e failures |
-| Known issues | Not discovered (never got past the dev-launcher screen) | **Discovered a real, reproducible rendering defect** (title text) — this session's main finding |
+REMEDIATION.md's scope item 4 called for a new Maestro flow that picks the
+pushed test image via the system **library** picker and asserts the badge.
+I could not do this safely and stopped partway through, for a reason the
+plan didn't anticipate: **on this physical phone, the library-picker
+handler is the user's actual Google Photos app**, not a scoped, sandboxed
+"system Photo Picker" sheet. While hunting for a safe, deterministic way
+to select our one pushed test image (by recency, by folder/album, by
+in-app search), I repeatedly landed on screens showing the phone owner's
+real personal photos — including, at one point, a photo of their
+**driver's license** (visible full-frame with name/address/photo) and
+several family photos. No personal data was read, copied, or acted upon;
+I backed out immediately each time and did not screenshot or retain
+anything containing personal content beyond what was necessarily visible
+in Maestro's own transient debug-artifact screenshots, which I have not
+included in `docs/evidence/`.
 
----
+Given the hard constraint "only touch `com.maneframe.app` and your own
+pushed test image on the phone," continuing to browse/search the real
+photo library to find one specific file was not an acceptable way to
+satisfy the letter of that goal. I made the call to stop, and instead:
 
-## 3. Known issues / STOP-and-report: title text rendering defect
+1. **Rewrote `flows/03-photo-tflite.yaml`** to only automate what's safe:
+   opening the picker (proving the entry point + permission flow work)
+   and backing out cleanly. It passes, and is flow 4 of the 4/4 result.
+2. **Verified the actual fix (tflite model load) via the camera-capture
+   path instead of the library picker.** Camera capture creates a
+   brand-new photo (in this case, a dark/black frame — the lens wasn't
+   pointed at anything in particular) rather than browsing existing ones,
+   so it carries none of the same privacy risk, while exercising the
+   *exact* code path under test (`PreviewScreen`'s segmentation effect
+   doesn't care how the photo arrived). This is how the before/after
+   logcat evidence in §4 was captured.
+3. Documented both the finding and the workaround in `docs/E2E.md`'s
+   coverage table and troubleshooting section, so this isn't silently
+   lost.
 
-**This is the blocking issue for scope item 4.** Per the remediation's
-explicit instruction ("if the app itself misbehaves, STOP and report with
-logcat + screenshot"), no fix was attempted — this is a native/graphics-
-layer defect, out of reach of the hard constraints (no prebuild, no
-hand-written Kotlin, no new dependencies) and outside this session's
-authorized scope.
-
-**Symptom:** On every cold launch of the preview build (`pm clear` +
-launch, or `launchApp: clearState: true` via Maestro), the SearchScreen
-title (`<Text style={styles.title}>ManeFrame</Text>`, `SearchScreen.tsx`
-line 72) renders with visibly corrupted, overlapping/double-exposed glyphs
-— see `docs/evidence/title-zoom.png` (a cropped, nearest-neighbor-zoomed
-region of a full-screen screenshot). No other text on the screen is
-affected — "Search"/"Preview" tab labels, hairstyle names ("Pixie Crop"
-etc.), and the "18 hairstyles · 40 colors" result-count line all render
-and expose accessibility text correctly.
-
-**It is not a rendering-timing race.** Reproduced identically:
-- Immediately after Maestro's `launchApp: clearState: true` (fails
-  consistently across 3 separate flow runs).
-- Via manual `pm clear` + `am start`, checked at 2s, 3s, 5s, and 8s
-  post-launch (`maestro hierarchy`, cross-checked against
-  `adb shell uiautomator dump`).
-- After forcing a full remount via tab-switch (Search → Preview → Search).
-- After forcing a relayout via tapping the search box.
-
-**The accessibility tree has zero nodes for this text at all** — not a
-text-content mismatch, an outright absence. `maestro hierarchy` sorted by
-vertical position shows the view tree jumping directly from the status-bar
-clock (`bounds: [167,6][267,136]`) to the search `EditText`
-(`bounds: [44,164][1036,291]`) with no `TextView` in between, where the
-title should be. Full dump: `docs/evidence/maestro-hierarchy-title-missing.json`
-(`grep -c "ManeFrame"` → 0 matches anywhere in the file). All other Text
-elements on screen (including the result-count line directly below the
-search box, and every hairstyle-card title) have normal, present
-`TextView` nodes with correct `text` attributes.
-
-**No exception is thrown.** `adb logcat -d --pid=<app pid>` for a fresh
-cold launch (`docs/evidence/logcat-pid-full.txt`) shows only benign,
-already-known `BridgelessReactContext`/`SafeAreaView`-deprecation warnings
-— no crash, no caught exception, no red screen. This is a silent
-graphics-compositing/text-rendering defect, not a JS-level bug.
-
-**Suspected cause (not confirmed — flagged for the next iteration's
-investigation, not acted on):** the title is the *first* text painted
-after the native splash screen is torn down (logcat shows
-`InputManager-JNI: Input channel object '...Splash Screen...' was disposed
-without first being removed with the input manager!` within ~180ms of the
-first JS render). `@shopify/react-native-skia`'s native module registers
-(`WebGPUViewManager`, `SkiaPictureViewManager`) at the same point in
-startup, before any screen actually uses a Skia `Canvas` (PreviewScreen,
-untouched by this flow). A GPU/EGL context race between Skia's
-initialization and the very first standard-Android-widget text paint is
-the most likely explanation for corruption isolated to exactly the first
-text element painted — but this is a hypothesis, not a diagnosis; no
-native debugging tools (Android Studio, GPU profiler) were available in
-this environment to confirm it.
-
-**Scope note:** this defect was not visible to any earlier iteration's
-verification. Iteration 3/4's Skia work was verified only via
-`typecheck`/`lint`/`test`/`expo export` (no device/emulator available at
-the time); this 4R-2 session's planner-verified state only confirmed the
-dev-client build reached the dev-launcher screen (never deep-linked into
-the actual bundle). This is the first time any iteration has visually
-inspected the real Search screen content on the preview/standalone build.
+I believe this is the right tradeoff: the plan's real goal (prove the
+expo-asset fix works, with logcat evidence) is fully met; the letter of
+"drive the library picker with Maestro" is not, for a good reason.
 
 ---
 
-## 4. Verbatim verification output
+## 1. Work done (scope-item mapping)
 
-### `npm run typecheck` / `npm run lint`
-Both clean, no output, exit 0.
+### 1. Model load path fix
 
-### `npm test`
-```
-Test Suites: 12 passed, 12 total
-Tests:       126 passed, 126 total
-Snapshots:   0 total
-Ran all test suites.
-```
+- `npx expo install expo-asset` → `~57.0.3` (the only new dependency, per
+  the hard constraint). Added `expo-asset` to `app.json`'s plugins
+  automatically by the installer.
+- `src/segmentation/tflite.ts`: new `resolveModelSource(asset)` helper —
+  given an `Asset`-like object (`{ localUri, downloadAsync() }`), it calls
+  `downloadAsync()` only if `localUri` is not already set, then returns
+  `{ url: localUri }`, throwing `TfliteSegmentationError` if `localUri` is
+  still null afterward. `loadModel()` now does
+  `resolveModelSource(Asset.fromModule(hairSegmenterModelAsset))` then
+  `loadTensorflowModel({ url }, [])` — the `[]` delegates argument is
+  unchanged, as instructed. A `console.log` mirrors fast-tflite's own
+  "Resolved Model path" line (which never fires for the `{ url }` source
+  form) so logcat still shows exactly where the model file came from.
+- Retry-on-failure singleton behavior preserved unchanged (`modelPromise`
+  reset to `null` in the `.catch`).
+- Unit tests: `src/segmentation/__tests__/tflite.test.ts`, 3 new tests
+  against a stubbed `ModuleAssetLike` (existing `localUri`, `null` →
+  `downloadAsync()` populates it, `null` after `downloadAsync()` throws).
+  Real `expo-asset` and real inference are never exercised in Jest, per
+  the handoff.
 
-### `npx expo export --platform android`
-```
-Android Bundled 3843ms index.ts (881 modules)
-› Assets (1): assets\models\hair_segmenter.tflite (782KB)
-› android bundles (1): _expo/static/js/android/index-...hbc (2MB)
-Exported: dist
-```
+### 2. Stop hiding segmentation failures
 
-### `npm run e2e` (final, against preview build `6121bda2`)
-```
-[Failed] 00-launch (24s) (Assertion is false: "ManeFrame" is visible)
-[Passed] 01-search (29s)
-[Passed] 02-preview-mock-badge (7s)
+- `src/segmentation/selectSegmenter.ts`: `SegmentWithFallbackResult` gained
+  a `rawError?: unknown` field (the original thrown value, alongside the
+  existing flattened `error: string`) so callers can walk the full
+  message+cause chain — `error` alone loses `cause`. Existing tests
+  unaffected (they only assert `.error`/`.usedFallback`/`.mask`).
+- `src/ui/PreviewScreen.tsx`:
+  - New `segmentationError` state, set only when `segmentWithFallback`'s
+    `usedFallback` is true (never for a deliberate `forceMock` toggle).
+  - `console.warn`s the message + `cause` (via `rawError`) whenever
+    fallback engages, so logcat always has the full chain.
+  - Badge label: `"tflite failed → mock"` when `segmentationError` is set,
+    else `"mock segmentation"` / `"tflite segmentation"` as before — so
+    the long-press toggle visibly does something even when tflite always
+    fails (previously both states rendered identical "mock segmentation"
+    text).
+  - New muted red line under the badge: `tflite failed: <message>`,
+    truncated to ~60 chars.
 
-1/3 Flow Failed
-```
-(Full JUnit XML archived above and in `flows/results.xml`.)
+### 3. UX fixes
 
-### EAS build
+- **Photo contain-fit:** the `SkiaImage` draw rect previously used
+  `photo.width`/`photo.height` (the decoded photo's *pixel* dimensions,
+  often >768px) as the Canvas-space rect size. Since the Canvas's actual
+  on-screen size is much smaller, this meant the image was drawn hugely
+  oversized relative to the visible viewport — effectively zoomed in/
+  cropped, matching the user's "photo not fully visible" complaint. Fixed
+  by measuring the wrapping `View`'s real layout size via `onLayout` and
+  using that (`canvasLayout.width`/`height`) for the draw rect instead,
+  with `fit="contain"` kept as a no-op safety net (the wrapper's
+  `aspectRatio` already matches the photo's, so contain is normally an
+  exact fit).
+- **Selected color visibility:** the "Color" section heading now reads
+  `"Color — <displayName>"` (e.g. "Color — Level 4 Natural Medium Dark
+  Brown"); the swatch `ScrollView` scrolls to the selected swatch's
+  estimated offset (`index * 74dp`) on `onContentSizeChange` (i.e. on
+  mount, once the row has laid out).
+- Pan/zoom is explicitly out of scope this iteration (noted as a future
+  nicety below), per the handoff.
+
+### 4. Builds + on-device verification
+
+- **Dev-client build** `32841af6-06b2-45d8-97e4-b6c0e4351952` (build 6 of
+  15 monthly), FINISHED. Installed; Metro started on port **8082** (8081
+  was held by a stale `node.exe` process from a prior session that this
+  session's sandbox couldn't `taskkill` - documented, not fought further).
+  Deep-linked in via
+  `exp+maneframe://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8082`.
+  **Both UX fixes (§3) confirmed visually live**: `docs/evidence/4r4-color-label-swatch-scroll.png`
+  shows "Color — Level 4 Natural Medium Dark Brown" and the swatch row
+  pre-scrolled to the selected (bordered) swatch.
+- **Preview build** `b297b77f-7d88-4800-832f-90916ba93f9e` (build 7 of
+  15), FINISHED, installed. `npm run e2e` → **4/4 flows pass** (see §5 for
+  the flow-03 scope change).
+- **Logcat evidence — before vs. after (the core ask for this
+  iteration):**
+
+  Before the fix, reinstalling the last-accepted preview build
+  (`ffa74b55`, predates this iteration) and picking a photo via the
+  camera:
+  ```
+  ReactNativeJS: Loading Tensorflow Lite Model 1
+  ReactNativeJS: Resolved Model path: assets_models_hair_segmenter
+  ```
+  No further tflite log ever appears for the app's process — the native
+  `AssetLoader` silently fails to open that Android-resource-style name
+  outside DEV, exactly as diagnosed. The badge reads **"mock
+  segmentation"** with no error surfaced (`docs/evidence/4r4-badge-before-mock-hidden.png`
+  — this is the exact bug the user reported).
+
+  After the fix, same physical device, same camera-capture procedure,
+  fixed preview build `b297b77f`:
+  ```
+  ReactNativeJS: [tflite] Resolved model localUri (expo-asset): file:///data/user/0/com.maneframe.app/cache/ExponentAsset-1effac57961bd80e59011dc99bd00cc1.tflite
+  tflite: Initialized TensorFlow Lite runtime.
+  tflite: Encountered unresolved custom op: MaxPoolingWithArgmax2D.
+  tflite: Node number 12 (MaxPoolingWithArgmax2D) failed to prepare.
+  ReactNativeJS: '[PreviewScreen] tflite segmentation failed, falling back to mock:', 'Failed to load the hair segmentation model.', '\ncause: Error: TfliteModule.createModel(...): TFLite: Failed to allocate memory for input/output tensors! Status: unresolved-ops'
+  ```
+  The model **file now resolves to a real local path and loads into the
+  TFLite runtime** — the release-build asset-resolution bug (this
+  iteration's actual scope) is fixed and verified. The badge now honestly
+  reads **"tflite failed → mock"** with the red line **"tflite failed:
+  Failed to load the hair segmentation model."** underneath
+  (`docs/evidence/4r4-badge-after-error-surfaced.png`) — proving the
+  error-surfacing fix (§2) also works, and that the long-press toggle now
+  visibly does something.
+
+  See "New finding" below for what the `MaxPoolingWithArgmax2D` line
+  means and why it's a distinct, follow-on issue.
+
+---
+
+## 2. New finding: unresolved custom op blocks real segmentation (carry-forward)
+
+Independent of and downstream from this iteration's fix: `hair_segmenter.tflite`
+(the model bundled in Iteration 4) contains a node using the custom op
+`MaxPoolingWithArgmax2D` (a pooling-with-indices op common in
+segmentation/unpooling architectures). The stock TFLite interpreter that
+`react-native-fast-tflite` bundles only ships the standard `BUILTIN` op
+set and does not resolve this op, so `TfliteModule.createModel(...)`
+throws `Status: unresolved-ops` at prepare time, every time, on this
+device. This was never visible before because the model never got past
+asset resolution in a release build (this iteration's bug) — Iteration 4's
+dev-client build was never actually put through end-to-end inference in a
+release-style bundle either, so this is a genuinely new, previously-latent
+finding, not something 4R-4 broke.
+
+Likely remediation paths for whoever picks this up (not attempted here -
+out of scope, needs its own planning): (a) a TFLite build/delegate with
+Select-TF-ops (`flex`) support that can resolve `MaxPoolingWithArgmax2D`,
+if `react-native-fast-tflite` exposes one; (b) re-export/convert the
+hair-segmentation model to avoid that op (e.g. a build targeting only
+standard ops); (c) fall back to the hand-rolled MediaPipe wrapper path
+noted as a fallback option back in `docs/PROGRESS.md`'s D2. This blocks
+the M5 gate exactly as the existing gate condition already anticipates
+("segmentation quality/latency findings decide whether M5 proceeds") —
+segmentation doesn't run at all yet, so M5 should not start.
+
+---
+
+## 3. Deviations from the handoff (disclosed)
+
+- **Flow 03 scope**: does not select a photo via the library picker (see
+  "What changed from plan"). It verifies the picker entry point only;
+  the badge/tflite-load assertion was verified out-of-band via camera
+  capture + logcat instead of via this flow's own assertion.
+- **Metro port**: 8081 was held by a stale process this session couldn't
+  kill (`taskkill` access denied); used `--port 8082` throughout instead,
+  with `adb reverse tcp:8082 tcp:8082` and the matching deep link. Noted
+  per the standing instruction to record what was done when a stale
+  Metro interferes.
+- A temporary `global.__debugTflite` hook was added to `App.tsx` during
+  investigation (to attempt CDP/Hermes-debugger-based verification before
+  the camera-capture approach was found) and **fully reverted** before any
+  commit — `git diff App.tsx` against the last commit is empty.
+
+---
+
+## 4. Verification commands run
+
 ```
-id:          6121bda2-b033-4e94-9d54-f473e0b4716b
-status:      FINISHED
-buildProfile: preview
-gitCommitHash: a2855324f2368bd1b209ceaee12bf4d143695ece
-createdAt:   2026-07-11T06:35:46.010Z
-completedAt: 2026-07-11T06:46:14.648Z
-artifacts.applicationArchiveUrl: https://expo.dev/artifacts/eas/ugmea4MtCdiJXWQ5WJPduV9RDJzWC5tFOVKglDxX-us.apk
+npx tsc --noEmit                     # clean
+npx eslint .                         # 0 errors / 0 warnings
+npx jest                             # 129/129 passed (126 + 3 new tflite.test.ts)
+npx expo export --platform android   # bundles cleanly, 890 modules
+npm run e2e                          # 4/4 flows pass (preview build b297b77f)
 ```
 
 ---
 
-## 5. File inventory
+## 5. File inventory (this iteration)
 
-**Commit `a285532`** (everything inherited from the crashed 4R session,
-plus this session's Metro-smoke evidence):
-```
-docs/E2E.md                                   (new, from crashed session)
-docs/REMEDIATION.md                           (new — this work order)
-docs/evidence/metro-smoke-1.png               (this session)
-docs/evidence/metro-smoke-2.png               (this session — clean, no dev-menu overlay)
-flows/00-launch.yaml                          (new, from crashed session)
-flows/01-search.yaml                          (new, from crashed session)
-flows/02-preview-mock-badge.yaml              (new, from crashed session)
-flows/results.xml                             (new, from crashed session — dev-client-mode failures)
-patches/@shopify+react-native-skia+2.6.2.patch (new, from crashed session)
-package.json / package-lock.json              (react-native-nitro-modules, patch-package, e2e scripts)
-src/ui/SearchScreen.tsx                       (testID="search-input", from crashed session)
-docs/HANDOFF.md / docs/PROGRESS.md            (planner's pre-existing uncommitted state, carried through unmodified)
-```
+- `src/segmentation/tflite.ts` — expo-asset resolution, `resolveModelSource`,
+  `ModuleAssetLike` type, evidence log line.
+- `src/segmentation/selectSegmenter.ts` — `rawError` field.
+- `src/segmentation/__tests__/tflite.test.ts` — new, 3 tests.
+- `src/ui/PreviewScreen.tsx` — error surfacing (badge + red line + console.warn),
+  canvas-layout-based contain-fit, selected-color heading, swatch auto-scroll.
+- `flows/03-photo-tflite.yaml` — new, entry-point-only (see deviations).
+- `docs/E2E.md` — coverage table + troubleshooting entries updated for the
+  above.
+- `docs/evidence/4r4-badge-before-mock-hidden.png`,
+  `4r4-badge-after-error-surfaced.png`, `4r4-color-label-swatch-scroll.png` —
+  new evidence screenshots.
+- `app.json`, `package.json`, `package-lock.json` — `expo-asset` dependency
+  + config plugin.
 
-**Commit `fbc0697`** (this session's e2e fixes + defect evidence):
-```
-.gitignore                                    (+*.apk, +*.aab — exclude downloaded build artifacts)
-docs/E2E.md                                   (two-modes section, troubleshooting rows, coverage table pass status)
-flows/01-search.yaml                          (fixed "warm red" -> "warm red shoulder-length bob")
-flows/results.xml                             (final acceptance run: 2/3 pass)
-docs/evidence/logcat-pid-full.txt             (new — no-exception evidence for the title defect)
-docs/evidence/maestro-hierarchy-title-missing.json (new — accessibility-tree evidence)
-docs/evidence/preview-launch.png              (new — preview build launches straight into the app)
-docs/evidence/title-zoom.png                  (new — zoomed evidence of the corrupted glyphs)
-docs/evidence/metro-smoke-1.png removed       (superseded by metro-smoke-2.png; had a dev-menu overlay obscuring the screen)
-```
+---
 
-**Not committed (intentionally):** `maneframe-preview.apk` (141.5 MB
-downloaded build artifact, now gitignored) — not source, would bloat the
-repo; the build is reproducible from the recorded build ID/commit.
-`docs/SUMMARY.md` (this file) stays uncommitted per the remediation's
-instruction.
+## 6. Known issues / carry-forwards
+
+- **Blocking, new (§2 above):** `MaxPoolingWithArgmax2D` unresolved custom
+  op prevents the tflite model from actually preparing/running, on top of
+  (now fixed) asset resolution. Real hair segmentation does not work
+  end-to-end yet. Needs its own remediation.
+- Pan/zoom for photo framing noted as a possible later nicety (not
+  attempted, per handoff).
+- The library-photo-picker step in `flows/03-photo-tflite.yaml` remains
+  manual-only, now for a documented safety reason (not just a tooling
+  gap) — see `docs/E2E.md`.
+- Dev-client build `32841af6` and preview build `b297b77f` both carry this
+  iteration's fixes; the dev-client is therefore no longer stale (unlike
+  the note carried from 4R-3).
 
 ---
 
 ## Verification requests for the user
 
-1. **Install the preview build on your own phone** to see the current
-   state independently:
-   https://expo.dev/artifacts/eas/ugmea4MtCdiJXWQ5WJPduV9RDJzWC5tFOVKglDxX-us.apk
-   (build page: https://expo.dev/accounts/michaelafuller/projects/maneframe/builds/6121bda2-b033-4e94-9d54-f473e0b4716b).
-   This replaces the dev-client build (same `applicationId`) — expected.
-2. **Look at the app title on first launch** and confirm/deny what this
-   report describes (corrupted "ManeFrame" text at the top of the Search
-   screen). A second device/screen would help rule out something specific
-   to the Pixel 5 test unit.
-3. Once the title-rendering defect is triaged by the planner (root cause
-   still unconfirmed — see "Suspected cause" above), the outstanding
-   manual checks from Iteration 4 remain open: tflite badge after picking
-   a photo, recolor tracking hair vs. face, rough segmentation latency,
-   and the Mock↔TFLite toggle. Recommend doing those *after* the title
-   defect is resolved, in case the same root cause (a Skia-init GPU race)
-   also affects the Preview tab's Canvas rendering.
+Once you're comfortable, a couple of things worth checking yourself (the
+segmentation-quality checklist is currently moot until the new
+`MaxPoolingWithArgmax2D` issue is fixed — the badge will honestly read
+"tflite failed → mock" for every photo until then):
 
-## Verification commands (repro for the planner)
-
-```bash
-adb install -r maneframe-preview.apk   # re-download from the artifact URL above
-adb shell pm clear com.maneframe.app
-adb shell am start -n com.maneframe.app/.MainActivity
-# wait ~3s, then:
-adb exec-out screencap -p > check.png   # look at the title
-maestro hierarchy | grep -c "ManeFrame" # expect 0
-npm run e2e                             # expect 00-launch to fail, 01-search + 02-preview-mock-badge to pass
-```
+1. **UX fixes**: pick a photo and confirm (a) it's fully visible,
+   centered/letterboxed, not zoomed/cropped; (b) the "Color" heading shows
+   your selected color's name and the swatch row is already scrolled to
+   it.
+2. **Error surfacing**: confirm the badge now reads "tflite failed → mock"
+   (not a silent "mock segmentation") and that a red line under it names
+   the failure.
+3. Once a follow-up iteration resolves the custom-op issue, the original
+   segmentation-quality checklist (badge says real tflite, mask tracks
+   hair not face, rough latency, toggle works) becomes meaningful again.
