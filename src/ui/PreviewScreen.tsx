@@ -25,6 +25,8 @@ import type { HairColor } from '../catalog/types';
 import type { RecolorParams } from '../color/recolor';
 import { recolorImageChunked } from '../color/recolorImage';
 import { MockHairSegmenter } from '../segmentation/mock';
+import { segmentWithFallback } from '../segmentation/selectSegmenter';
+import { TfliteHairSegmenter } from '../segmentation/tflite';
 import type { HairMask } from '../segmentation/types';
 import { ColorSwatch } from './ColorSwatch';
 
@@ -88,7 +90,8 @@ export default function PreviewScreen({
   selectedColor: HairColor | null;
 }) {
   const allColors = useMemo(() => loadColors(), []);
-  const segmenter = useMemo(() => new MockHairSegmenter(), []);
+  const tfliteSegmenter = useMemo(() => new TfliteHairSegmenter(), []);
+  const mockSegmenter = useMemo(() => new MockHairSegmenter(), []);
 
   const [activeColor, setActiveColor] = useState<HairColor>(
     selectedColor ?? allColors[0]
@@ -101,6 +104,13 @@ export default function PreviewScreen({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Dev toggle: force the mock segmenter even when TFLite is available, to
+  // compare the two side by side. Also flips true automatically whenever
+  // TFLite construction/inference actually fails (see the segmentation
+  // effect below), so the "mock segmentation" badge reflects reality either
+  // way.
+  const [forceMock, setForceMock] = useState(false);
+  const [usingMock, setUsingMock] = useState(false);
 
   const runIdRef = useRef(0);
 
@@ -121,15 +131,33 @@ export default function PreviewScreen({
     (async () => {
       if (!photo) {
         setMask(null);
+        setUsingMock(false);
         return;
       }
-      const m = await segmenter.segment(photo.width, photo.height, photo.pixels);
-      if (!cancelled) setMask(m);
+      if (forceMock) {
+        const m = await mockSegmenter.segment(photo.width, photo.height, photo.pixels);
+        if (!cancelled) {
+          setMask(m);
+          setUsingMock(true);
+        }
+        return;
+      }
+      const result = await segmentWithFallback(
+        tfliteSegmenter,
+        mockSegmenter,
+        photo.width,
+        photo.height,
+        photo.pixels
+      );
+      if (!cancelled) {
+        setMask(result.mask);
+        setUsingMock(result.usedFallback);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [photo, segmenter]);
+  }, [photo, forceMock, tfliteSegmenter, mockSegmenter]);
 
   // Recolor whenever the photo, mask, color, or intensity changes. Stale
   // runs (superseded by a newer color/intensity/photo change) are ignored.
@@ -249,33 +277,47 @@ export default function PreviewScreen({
 
         {photo && (
           <>
-            <Pressable
-              onPressIn={() => setShowOriginal(true)}
-              onPressOut={() => setShowOriginal(false)}
+            <View
               style={[
                 styles.canvasWrapper,
                 { aspectRatio: photo.width / photo.height },
               ]}
             >
-              <Canvas style={styles.canvas}>
-                <SkiaImage
-                  image={displayImage}
-                  x={0}
-                  y={0}
-                  width={photo.width}
-                  height={photo.height}
-                  fit="contain"
-                />
-              </Canvas>
-              {isProcessing && (
-                <View style={styles.processingOverlay}>
-                  <ActivityIndicator color="#fff" />
-                  <Text style={styles.processingLabel}>Processing…</Text>
-                </View>
-              )}
-            </Pressable>
+              <Pressable
+                onPressIn={() => setShowOriginal(true)}
+                onPressOut={() => setShowOriginal(false)}
+                style={styles.canvasPressable}
+              >
+                <Canvas style={styles.canvas}>
+                  <SkiaImage
+                    image={displayImage}
+                    x={0}
+                    y={0}
+                    width={photo.width}
+                    height={photo.height}
+                    fit="contain"
+                  />
+                </Canvas>
+                {isProcessing && (
+                  <View style={styles.processingOverlay}>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.processingLabel}>Processing…</Text>
+                  </View>
+                )}
+              </Pressable>
+              <Pressable
+                style={styles.segmenterBadge}
+                onLongPress={() => setForceMock((f) => !f)}
+                testID="segmenter-badge"
+              >
+                <Text style={styles.segmenterBadgeLabel}>
+                  {usingMock ? 'mock segmentation' : 'tflite segmentation'}
+                </Text>
+              </Pressable>
+            </View>
             <Text style={styles.hint}>
-              Press and hold the photo to see the original.
+              Press and hold the photo to see the original. Long-press the
+              badge in the corner to toggle mock ↔ tflite segmentation.
             </Text>
 
             <Pressable
@@ -389,6 +431,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#000',
     marginBottom: 8,
+    position: 'relative',
+  },
+  canvasPressable: {
+    flex: 1,
   },
   canvas: {
     flex: 1,
@@ -403,6 +449,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginTop: 8,
     fontSize: 13,
+  },
+  segmenterBadge: {
+    position: 'absolute',
+    right: 8,
+    top: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  segmenterBadgeLabel: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
   hint: {
     fontSize: 12,

@@ -10,6 +10,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.maneframe.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +21,23 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "react-native-fast-tflite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow ManeFrame to access your photos to preview hair color changes.",
+          "cameraPermission": "Allow ManeFrame to access your camera to take a photo for hair color preview.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "cdefda41-c6d1-4f3c-94ef-3b513c66b2ce"
+      }
+    },
+    "owner": "michaelafuller"
   }
 }
