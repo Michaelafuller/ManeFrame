@@ -1,0 +1,567 @@
+[
+  {
+    "id": "level-1-natural",
+    "displayName": "Level 1 Natural Black",
+    "level": 1,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 9,
+      "a": 2,
+      "b": 3
+    },
+    "opacity": 0.71,
+    "highlightRetention": 0.17
+  },
+  {
+    "id": "level-2-natural",
+    "displayName": "Level 2 Natural Darkest Brown",
+    "level": 2,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 16,
+      "a": 3,
+      "b": 5
+    },
+    "opacity": 0.72,
+    "highlightRetention": 0.19
+  },
+  {
+    "id": "level-3-natural",
+    "displayName": "Level 3 Natural Dark Brown",
+    "level": 3,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 23,
+      "a": 4,
+      "b": 8
+    },
+    "opacity": 0.73,
+    "highlightRetention": 0.21
+  },
+  {
+    "id": "level-4-natural",
+    "displayName": "Level 4 Natural Medium Dark Brown",
+    "level": 4,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 31,
+      "a": 5,
+      "b": 12
+    },
+    "opacity": 0.74,
+    "highlightRetention": 0.23
+  },
+  {
+    "id": "level-5-natural",
+    "displayName": "Level 5 Natural Medium Brown",
+    "level": 5,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 39,
+      "a": 6,
+      "b": 16
+    },
+    "opacity": 0.75,
+    "highlightRetention": 0.25
+  },
+  {
+    "id": "level-6-natural",
+    "displayName": "Level 6 Natural Light Brown",
+    "level": 6,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 47,
+      "a": 5,
+      "b": 20
+    },
+    "opacity": 0.76,
+    "highlightRetention": 0.27
+  },
+  {
+    "id": "level-7-natural",
+    "displayName": "Level 7 Natural Dark Blonde",
+    "level": 7,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 55,
+      "a": 4,
+      "b": 24
+    },
+    "opacity": 0.77,
+    "highlightRetention": 0.29
+  },
+  {
+    "id": "level-8-natural",
+    "displayName": "Level 8 Natural Medium Blonde",
+    "level": 8,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 63,
+      "a": 3,
+      "b": 27
+    },
+    "opacity": 0.78,
+    "highlightRetention": 0.31
+  },
+  {
+    "id": "level-9-natural",
+    "displayName": "Level 9 Natural Light Blonde",
+    "level": 9,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 71,
+      "a": 2,
+      "b": 30
+    },
+    "opacity": 0.79,
+    "highlightRetention": 0.33
+  },
+  {
+    "id": "level-10-natural",
+    "displayName": "Level 10 Natural Lightest Blonde",
+    "level": 10,
+    "family": "natural",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 80,
+      "a": 1,
+      "b": 32
+    },
+    "opacity": 0.8,
+    "highlightRetention": 0.35
+  },
+  {
+    "id": "level-4-ash",
+    "displayName": "Ash Brown",
+    "level": 4,
+    "family": "ash",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 31,
+      "a": -3,
+      "b": -2
+    },
+    "opacity": 0.75,
+    "highlightRetention": 0.3
+  },
+  {
+    "id": "level-6-ash",
+    "displayName": "Dark Ash Blonde",
+    "level": 6,
+    "family": "ash",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 47,
+      "a": -4,
+      "b": -3
+    },
+    "opacity": 0.68,
+    "highlightRetention": 0.4
+  },
+  {
+    "id": "level-8-ash",
+    "displayName": "Ash Blonde",
+    "level": 8,
+    "family": "ash",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 63,
+      "a": -5,
+      "b": -4
+    },
+    "opacity": 0.6,
+    "highlightRetention": 0.5
+  },
+  {
+    "id": "level-9-ash",
+    "displayName": "Light Ash Blonde",
+    "level": 9,
+    "family": "ash",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 71,
+      "a": -6,
+      "b": -6
+    },
+    "opacity": 0.55,
+    "highlightRetention": 0.55
+  },
+  {
+    "id": "level-5-gold",
+    "displayName": "Medium Golden Brown",
+    "level": 5,
+    "family": "gold",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 39,
+      "a": 4,
+      "b": 18
+    },
+    "opacity": 0.75,
+    "highlightRetention": 0.3
+  },
+  {
+    "id": "level-6-gold",
+    "displayName": "Golden Brown",
+    "level": 6,
+    "family": "gold",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 47,
+      "a": 5,
+      "b": 22
+    },
+    "opacity": 0.7,
+    "highlightRetention": 0.35
+  },
+  {
+    "id": "level-7-gold",
+    "displayName": "Golden Blonde",
+    "level": 7,
+    "family": "gold",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 55,
+      "a": 5,
+      "b": 26
+    },
+    "opacity": 0.65,
+    "highlightRetention": 0.45
+  },
+  {
+    "id": "level-9-gold",
+    "displayName": "Light Golden Blonde",
+    "level": 9,
+    "family": "gold",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 71,
+      "a": 3,
+      "b": 32
+    },
+    "opacity": 0.55,
+    "highlightRetention": 0.55
+  },
+  {
+    "id": "level-4-copper",
+    "displayName": "Copper Brown",
+    "level": 4,
+    "family": "copper",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 31,
+      "a": 12,
+      "b": 20
+    },
+    "opacity": 0.78,
+    "highlightRetention": 0.28
+  },
+  {
+    "id": "level-5-copper",
+    "displayName": "Medium Copper",
+    "level": 5,
+    "family": "copper",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 39,
+      "a": 14,
+      "b": 24
+    },
+    "opacity": 0.72,
+    "highlightRetention": 0.34
+  },
+  {
+    "id": "level-6-copper",
+    "displayName": "Dark Copper Blonde",
+    "level": 6,
+    "family": "copper",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 47,
+      "a": 16,
+      "b": 28
+    },
+    "opacity": 0.66,
+    "highlightRetention": 0.4
+  },
+  {
+    "id": "level-8-copper",
+    "displayName": "Light Copper Blonde",
+    "level": 8,
+    "family": "copper",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 63,
+      "a": 14,
+      "b": 30
+    },
+    "opacity": 0.58,
+    "highlightRetention": 0.5
+  },
+  {
+    "id": "level-3-red",
+    "displayName": "Dark Red Brown",
+    "level": 3,
+    "family": "red",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 23,
+      "a": 20,
+      "b": 10
+    },
+    "opacity": 0.8,
+    "highlightRetention": 0.25
+  },
+  {
+    "id": "level-4-red",
+    "displayName": "Red Brown",
+    "level": 4,
+    "family": "red",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 31,
+      "a": 24,
+      "b": 12
+    },
+    "opacity": 0.76,
+    "highlightRetention": 0.3
+  },
+  {
+    "id": "level-5-red",
+    "displayName": "Medium Auburn",
+    "level": 5,
+    "family": "red",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 39,
+      "a": 28,
+      "b": 14
+    },
+    "opacity": 0.7,
+    "highlightRetention": 0.36
+  },
+  {
+    "id": "level-7-red",
+    "displayName": "Strawberry Blonde",
+    "level": 7,
+    "family": "red",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 55,
+      "a": 26,
+      "b": 16
+    },
+    "opacity": 0.6,
+    "highlightRetention": 0.48
+  },
+  {
+    "id": "level-5-violet",
+    "displayName": "Violet Brown",
+    "level": 5,
+    "family": "violet",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 39,
+      "a": 6,
+      "b": -8
+    },
+    "opacity": 0.72,
+    "highlightRetention": 0.32
+  },
+  {
+    "id": "level-6-violet",
+    "displayName": "Smoky Violet Blonde",
+    "level": 6,
+    "family": "violet",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 47,
+      "a": 5,
+      "b": -10
+    },
+    "opacity": 0.66,
+    "highlightRetention": 0.4
+  },
+  {
+    "id": "level-8-violet",
+    "displayName": "Violet Ash Blonde",
+    "level": 8,
+    "family": "violet",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 63,
+      "a": 4,
+      "b": -12
+    },
+    "opacity": 0.58,
+    "highlightRetention": 0.5
+  },
+  {
+    "id": "level-9-violet",
+    "displayName": "Silver Violet Blonde",
+    "level": 9,
+    "family": "violet",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 71,
+      "a": 3,
+      "b": -14
+    },
+    "opacity": 0.52,
+    "highlightRetention": 0.58
+  },
+  {
+    "id": "level-3-mahogany",
+    "displayName": "Dark Mahogany",
+    "level": 3,
+    "family": "mahogany",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 23,
+      "a": 16,
+      "b": 4
+    },
+    "opacity": 0.8,
+    "highlightRetention": 0.24
+  },
+  {
+    "id": "level-4-mahogany",
+    "displayName": "Mahogany Brown",
+    "level": 4,
+    "family": "mahogany",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 31,
+      "a": 18,
+      "b": 5
+    },
+    "opacity": 0.75,
+    "highlightRetention": 0.3
+  },
+  {
+    "id": "level-5-mahogany",
+    "displayName": "Medium Mahogany",
+    "level": 5,
+    "family": "mahogany",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 39,
+      "a": 20,
+      "b": 6
+    },
+    "opacity": 0.68,
+    "highlightRetention": 0.36
+  },
+  {
+    "id": "level-6-mahogany",
+    "displayName": "Light Mahogany",
+    "level": 6,
+    "family": "mahogany",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 47,
+      "a": 18,
+      "b": 7
+    },
+    "opacity": 0.62,
+    "highlightRetention": 0.42
+  },
+  {
+    "id": "fashion-pastel-pink",
+    "displayName": "Pastel Pink",
+    "level": 9,
+    "family": "fashion",
+    "temperature": "neutral",
+    "targetLab": {
+      "l": 80,
+      "a": 20,
+      "b": -2
+    },
+    "opacity": 0.45,
+    "highlightRetention": 0.7,
+    "minimumRecommendedStartingLevel": 9
+  },
+  {
+    "id": "fashion-silver",
+    "displayName": "Silver",
+    "level": 10,
+    "family": "fashion",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 85,
+      "a": -1,
+      "b": -3
+    },
+    "opacity": 0.5,
+    "highlightRetention": 0.75,
+    "minimumRecommendedStartingLevel": 10
+  },
+  {
+    "id": "fashion-blue-black",
+    "displayName": "Blue Black",
+    "level": 1,
+    "family": "fashion",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 8,
+      "a": 1,
+      "b": -10
+    },
+    "opacity": 0.9,
+    "highlightRetention": 0.15
+  },
+  {
+    "id": "fashion-teal",
+    "displayName": "Teal",
+    "level": 8,
+    "family": "fashion",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 70,
+      "a": -30,
+      "b": -15
+    },
+    "opacity": 0.5,
+    "highlightRetention": 0.65,
+    "minimumRecommendedStartingLevel": 8
+  },
+  {
+    "id": "fashion-lavender",
+    "displayName": "Lavender",
+    "level": 9,
+    "family": "fashion",
+    "temperature": "cool",
+    "targetLab": {
+      "l": 75,
+      "a": 12,
+      "b": -20
+    },
+    "opacity": 0.45,
+    "highlightRetention": 0.7,
+    "minimumRecommendedStartingLevel": 9
+  },
+  {
+    "id": "fashion-vivid-cherry-red",
+    "displayName": "Vivid Cherry Red",
+    "level": 5,
+    "family": "fashion",
+    "temperature": "warm",
+    "targetLab": {
+      "l": 45,
+      "a": 45,
+      "b": 15
+    },
+    "opacity": 0.75,
+    "highlightRetention": 0.35,
+    "minimumRecommendedStartingLevel": 7
+  }
+]

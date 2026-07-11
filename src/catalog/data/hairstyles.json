@@ -1,0 +1,349 @@
+[
+  {
+    "id": "pixie-crop",
+    "name": "Pixie Crop",
+    "assets": {
+      "front": "assets/hairstyles/pixie-crop/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/pixie-crop/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/pixie-crop/right-three-quarter.webp"
+    },
+    "lengths": [
+      "short"
+    ],
+    "fringe": [
+      "side-swept"
+    ],
+    "textures": [
+      "straight"
+    ],
+    "attributes": [
+      "pixie",
+      "cropped",
+      "low-maintenance"
+    ]
+  },
+  {
+    "id": "buzz-cut",
+    "name": "Buzz Cut",
+    "assets": {
+      "front": "assets/hairstyles/buzz-cut/front.webp"
+    },
+    "lengths": [
+      "buzzed"
+    ],
+    "fringe": [
+      "none"
+    ],
+    "textures": [
+      "straight"
+    ],
+    "attributes": [
+      "buzz",
+      "cropped",
+      "low-maintenance"
+    ]
+  },
+  {
+    "id": "classic-bob",
+    "name": "Classic Bob",
+    "assets": {
+      "front": "assets/hairstyles/classic-bob/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/classic-bob/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/classic-bob/right-three-quarter.webp"
+    },
+    "lengths": [
+      "chin"
+    ],
+    "fringe": [
+      "none"
+    ],
+    "textures": [
+      "straight"
+    ],
+    "attributes": [
+      "bob",
+      "blunt-cut"
+    ]
+  },
+  {
+    "id": "blunt-bang-bob",
+    "name": "Blunt Bang Bob",
+    "assets": {
+      "front": "assets/hairstyles/blunt-bang-bob/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/blunt-bang-bob/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/blunt-bang-bob/right-three-quarter.webp"
+    },
+    "lengths": [
+      "chin"
+    ],
+    "fringe": [
+      "blunt-bangs"
+    ],
+    "textures": [
+      "straight"
+    ],
+    "attributes": [
+      "bob",
+      "blunt-bangs"
+    ]
+  },
+  {
+    "id": "classic-lob",
+    "name": "Classic Lob",
+    "assets": {
+      "front": "assets/hairstyles/classic-lob/front.webp"
+    },
+    "lengths": [
+      "shoulder"
+    ],
+    "fringe": [
+      "none"
+    ],
+    "textures": [
+      "straight"
+    ],
+    "attributes": [
+      "lob",
+      "long-bob"
+    ]
+  },
+  {
+    "id": "side-swept-lob",
+    "name": "Side-Swept Lob",
+    "assets": {
+      "front": "assets/hairstyles/side-swept-lob/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/side-swept-lob/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/side-swept-lob/right-three-quarter.webp"
+    },
+    "lengths": [
+      "shoulder"
+    ],
+    "fringe": [
+      "side-swept"
+    ],
+    "textures": [
+      "wavy"
+    ],
+    "attributes": [
+      "lob",
+      "side-part"
+    ]
+  },
+  {
+    "id": "shoulder-layers",
+    "name": "Shoulder Layers",
+    "assets": {
+      "front": "assets/hairstyles/shoulder-layers/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/shoulder-layers/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/shoulder-layers/right-three-quarter.webp"
+    },
+    "lengths": [
+      "shoulder",
+      "medium"
+    ],
+    "fringe": [
+      "wispy-bangs"
+    ],
+    "textures": [
+      "wavy"
+    ],
+    "attributes": [
+      "layered",
+      "face-framing"
+    ]
+  },
+  {
+    "id": "curtain-bang-midi",
+    "name": "Curtain Bang Midi",
+    "assets": {
+      "front": "assets/hairstyles/curtain-bang-midi/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/curtain-bang-midi/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/curtain-bang-midi/right-three-quarter.webp"
+    },
+    "lengths": [
+      "medium"
+    ],
+    "fringe": [
+      "curtain-bangs"
+    ],
+    "textures": [
+      "straight"
+    ],
+    "attributes": [
+      "midi",
+      "curtain-bangs",
+      "70s-inspired"
+    ]
+  },
+  {
+    "id": "medium-curtain-layers",
+    "name": "Medium Curtain Layers",
+    "assets": {
+      "front": "assets/hairstyles/medium-curtain-layers/front.webp"
+    },
+    "lengths": [
+      "medium"
+    ],
+    "fringe": [
+      "curtain-bangs"
+    ],
+    "textures": [
+      "wavy"
+    ],
+    "attributes": [
+      "layered",
+      "curtain-bangs"
+    ]
+  },
+  {
+    "id": "long-straight",
+    "name": "Long Straight",
+    "assets": {
+      "front": "assets/hairstyles/long-straight/front.webp"
+    },
+    "lengths": [
+      "long"
+    ],
+    "fringe": [
+      "none"
+    ],
+    "textures": [
+      "straight"
+    ],
+    "attributes": [
+      "long",
+      "sleek"
+    ]
+  },
+  {
+    "id": "long-beach-waves",
+    "name": "Long Beach Waves",
+    "assets": {
+      "front": "assets/hairstyles/long-beach-waves/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/long-beach-waves/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/long-beach-waves/right-three-quarter.webp"
+    },
+    "lengths": [
+      "long"
+    ],
+    "fringe": [
+      "none"
+    ],
+    "textures": [
+      "wavy"
+    ],
+    "attributes": [
+      "long",
+      "beachy"
+    ]
+  },
+  {
+    "id": "long-wispy-layers",
+    "name": "Long Wispy Layers",
+    "assets": {
+      "front": "assets/hairstyles/long-wispy-layers/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/long-wispy-layers/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/long-wispy-layers/right-three-quarter.webp"
+    },
+    "lengths": [
+      "long"
+    ],
+    "fringe": [
+      "wispy-bangs"
+    ],
+    "textures": [
+      "wavy"
+    ],
+    "attributes": [
+      "long",
+      "layered"
+    ]
+  },
+  {
+    "id": "blunt-bang-long",
+    "name": "Blunt Bang Long",
+    "assets": {
+      "front": "assets/hairstyles/blunt-bang-long/front.webp"
+    },
+    "lengths": [
+      "long"
+    ],
+    "fringe": [
+      "blunt-bangs"
+    ],
+    "textures": [
+      "straight"
+    ],
+    "attributes": [
+      "long",
+      "blunt-bangs"
+    ]
+  },
+  {
+    "id": "curly-shag",
+    "name": "Curly Shag",
+    "assets": {
+      "front": "assets/hairstyles/curly-shag/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/curly-shag/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/curly-shag/right-three-quarter.webp"
+    },
+    "lengths": [
+      "medium"
+    ],
+    "fringe": [
+      "curtain-bangs"
+    ],
+    "textures": [
+      "wavy",
+      "curly"
+    ],
+    "attributes": [
+      "shag",
+      "curly",
+      "layered"
+    ]
+  },
+  {
+    "id": "coily-afro",
+    "name": "Coily Afro",
+    "assets": {
+      "front": "assets/hairstyles/coily-afro/front.webp"
+    },
+    "lengths": [
+      "medium"
+    ],
+    "fringe": [
+      "none"
+    ],
+    "textures": [
+      "coily"
+    ],
+    "attributes": [
+      "afro",
+      "voluminous",
+      "natural-texture"
+    ]
+  },
+  {
+    "id": "coily-shoulder-twists",
+    "name": "Coily Shoulder Twists",
+    "assets": {
+      "front": "assets/hairstyles/coily-shoulder-twists/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/coily-shoulder-twists/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/coily-shoulder-twists/right-three-quarter.webp"
+    },
+    "lengths": [
+      "shoulder"
+    ],
+    "fringe": [
+      "none"
+    ],
+    "textures": [
+      "coily"
+    ],
+    "attributes": [
+      "twists",
+      "protective-style"
+    ]
+  }
+]
