@@ -1,14 +1,20 @@
 # HANDOFF — Iteration 5 (Milestone M5: live camera recoloring)
 
-**Author:** Fable 5 (planner) · **Status: BLOCKED — awaiting user on-device verification of Iteration 4**
+**Author:** Fable 5 (planner) · **Status: BLOCKED — awaiting user manual checks (Iteration 4R closed the launch crash; E2E is green)**
 
 ## Gate
 
-Do not start this iteration until the user has completed the
-"Verification requests for the user" checklist in the Iteration-4
-`docs/SUMMARY.md` (install the dev-client APK, confirm the badge reads
-"tflite segmentation", confirm recolor tracks hair rather than face,
-report rough pick-to-recolor latency, exercise the Mock↔TFLite toggle).
+Iteration 4R is accepted: the app launches (Nitro fix), insets are correct
+(safe-area-context), and all 3 Maestro flows pass on preview build
+`ffa74b55` — which is already installed on the user's phone. Remaining gate
+before M5: the user's manual segmentation checks (badge reads "tflite
+segmentation" after picking a photo, recolor tracks hair rather than face,
+rough pick-to-recolor latency, Mock↔TFLite long-press toggle).
+
+Note for this iteration when it starts: the development-profile client
+`68834a2f` is stale (lacks safe-area-context) — M5's native-dependency
+changes require a new development build anyway; build it alongside the
+first M5 EAS build (10 of 15 monthly builds remain).
 
 The user's findings determine this iteration's shape:
 

@@ -168,3 +168,34 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
   recolor tracks hair not face, rough latency, toggle works). Segmentation
   quality/latency findings decide whether M5 proceeds as planned or a
   remediation iteration tunes the mask pipeline first.
+
+### Iteration 4R (4R → 4R-2 → 4R-3) — ACCEPTED (2026-07-11) — launch crash fixed, E2E green
+
+- **Rejection trigger:** Iteration 4's APK crashed instantly on the user's
+  phone. Root cause (planner-diagnosed, device-confirmed):
+  `react-native-fast-tflite` v3 is a Nitro Module; its peer dependency
+  `react-native-nitro-modules` was auto-installed by npm but absent from
+  package.json, so Expo autolinking never built the Nitro core into the APK.
+- Commits `a285532`/`fbc0697` (4R/4R-2) + `ed2014c`/`226f694` (4R-3):
+  nitro-modules dependency added; patch-package fix for a second real bug
+  (Skia `useVideoLoading` throws at JS import when reanimated is absent);
+  Maestro E2E harness (3 flows, `npm run e2e`, docs/E2E.md with two-mode
+  protocol adapted from the user's TummyTracker project); safe-area insets
+  via `react-native-safe-area-context` (SDK 57 edge-to-edge made the title
+  render under the status bar — 4R-2 misdiagnosed this as GPU text
+  corruption; planner geometry-matched the "corrupted glyphs" to the
+  status-bar clock bounds and re-dumped the a11y tree to refute it).
+- Execution was interrupted once by a host-machine crash mid-4R; state was
+  reconstructed from the working tree + EAS build fingerprints (the stale
+  pre-fix preview build `0cb773cb` explains the "reverted" build the user
+  saw).
+- **Acceptance evidence (planner-independent):** `npm run e2e` re-run by
+  reviewer → 3/3 flows pass on preview build `ffa74b55` installed on the
+  attached phone; screenshot confirms correct insets; 126/126 unit tests.
+  EAS usage: 5 of 15 monthly builds consumed.
+- **Known debt:** dev-client build `68834a2f` is stale (predates
+  safe-area-context) — Metro-mode JS loading will error until M5's natural
+  dev-client rebuild; documented in docs/E2E.md.
+- Gate for M5 unchanged and now unblocked: user's manual segmentation
+  checklist (tflite badge, hair-vs-face recolor, latency, toggle) on the
+  installed preview build.

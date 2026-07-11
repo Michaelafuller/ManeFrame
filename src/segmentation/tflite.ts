@@ -10,6 +10,7 @@
  * `__mocks__/react-native-fast-tflite.js` stub used for tests).
  */
 
+import { Asset } from 'expo-asset';
 import { loadTensorflowModel, type TfliteModel } from 'react-native-fast-tflite';
 
 import hairSegmenterModelAsset from '../../assets/models/hair_segmenter.tflite';
@@ -27,13 +28,58 @@ export class TfliteSegmentationError extends Error {
   }
 }
 
+/**
+ * Minimal shape of the object `Asset.fromModule(...)` returns - narrowed to
+ * just what `resolveModelSource` needs so it can be unit-tested with a
+ * plain stub instead of the real `expo-asset` module (which requires a
+ * native module and can't run under Jest).
+ */
+export interface ModuleAssetLike {
+  localUri: string | null;
+  downloadAsync(): Promise<unknown>;
+}
+
+/**
+ * Resolves a Metro asset module (a `require(...)`-style numeric id) to a
+ * local file URI usable by `loadTensorflowModel`.
+ *
+ * In DEV, Metro serves assets over `http://.../assets/...` and
+ * `Image.resolveAssetSource` alone is enough - fast-tflite's own loader
+ * handles that case fine. In RELEASE builds the same resolution instead
+ * yields an Android resource reference the native `AssetLoader` cannot
+ * open, so the model silently fails to load (see docs/REMEDIATION.md
+ * Iteration 4R-4). Routing through `expo-asset`'s `downloadAsync` - which
+ * copies the bundled resource to a real file:// path on first use - fixes
+ * this in both DEV and RELEASE.
+ */
+export async function resolveModelSource(asset: ModuleAssetLike): Promise<{ url: string }> {
+  if (!asset.localUri) {
+    await asset.downloadAsync();
+  }
+  if (!asset.localUri) {
+    throw new TfliteSegmentationError(
+      'expo-asset could not resolve a local file URI for the hair segmentation model ' +
+        '(localUri was null after downloadAsync()).'
+    );
+  }
+  // Mirrors fast-tflite's own "Resolved Model path: ..." log (which never
+  // fires for the `{ url }` source form we now use) so logcat still shows
+  // where the model file actually came from - useful before/after evidence
+  // for docs/REMEDIATION.md Iteration 4R-4.
+  console.log(`[tflite] Resolved model localUri (expo-asset): ${asset.localUri}`);
+  return { url: asset.localUri };
+}
+
 // Lazy singleton: the model is only loaded once, on first use, and shared
 // across every `TfliteHairSegmenter` instance/call.
 let modelPromise: Promise<TfliteModel> | null = null;
 
 function loadModel(): Promise<TfliteModel> {
   if (!modelPromise) {
-    modelPromise = loadTensorflowModel(hairSegmenterModelAsset, []).catch((e: unknown) => {
+    modelPromise = (async () => {
+      const source = await resolveModelSource(Asset.fromModule(hairSegmenterModelAsset));
+      return loadTensorflowModel(source, []);
+    })().catch((e: unknown) => {
       // Allow a later call to retry loading rather than permanently
       // failing every subsequent segment() call in the same app session.
       modelPromise = null;

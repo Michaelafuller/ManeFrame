@@ -31,7 +31,8 @@
           "cameraPermission": "Allow ManeFrame to access your camera to take a photo for hair color preview.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "eas": {

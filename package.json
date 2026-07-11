@@ -5,6 +5,7 @@
   "dependencies": {
     "@shopify/react-native-skia": "2.6.2",
     "expo": "~57.0.4",
+    "expo-asset": "~57.0.3",
     "expo-dev-client": "~57.0.5",
     "expo-image-manipulator": "~57.0.2",
     "expo-image-picker": "~57.0.2",

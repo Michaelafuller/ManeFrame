@@ -12,6 +12,14 @@ export interface SegmentWithFallbackResult {
   usedFallback: boolean;
   /** The error message from `primary`, only set when `usedFallback` is true. */
   error?: string;
+  /**
+   * The raw value `primary` threw/rejected with (only set when
+   * `usedFallback` is true). Exposed alongside the flattened `error`
+   * string so callers that want the full chain (message + `cause`, e.g.
+   * for logcat) can walk it themselves - `error` alone loses any `cause`
+   * on an `Error`.
+   */
+  rawError?: unknown;
 }
 
 /**
@@ -36,6 +44,7 @@ export async function segmentWithFallback(
       mask,
       usedFallback: true,
       error: e instanceof Error ? e.message : String(e),
+      rawError: e,
     };
   }
 }

@@ -111,6 +111,19 @@ export default function PreviewScreen({
   // way.
   const [forceMock, setForceMock] = useState(false);
   const [usingMock, setUsingMock] = useState(false);
+  // Set only when the tflite segmenter actually failed and the mock
+  // engaged as a fallback (see the "Stop hiding segmentation failures"
+  // fix, docs/REMEDIATION.md Iteration 4R-4) - never set for a plain
+  // user-toggled mock, so the badge only shows a failure reason when
+  // there was an actual failure.
+  const [segmentationError, setSegmentationError] = useState<string | null>(null);
+  // Layout size (dp) of the canvas view, measured via onLayout. The
+  // decoded photo's own pixel dimensions (often >768px) are not the same
+  // as the on-screen view size, so the SkiaImage draw rect must use this
+  // measured size - not photo.width/height - or the image renders zoomed
+  // in/cropped instead of fully visible and centered.
+  const [canvasLayout, setCanvasLayout] = useState({ width: 0, height: 0 });
+  const swatchScrollRef = useRef<ScrollView | null>(null);
 
   const runIdRef = useRef(0);
 
@@ -132,6 +145,7 @@ export default function PreviewScreen({
       if (!photo) {
         setMask(null);
         setUsingMock(false);
+        setSegmentationError(null);
         return;
       }
       if (forceMock) {
@@ -139,6 +153,7 @@ export default function PreviewScreen({
         if (!cancelled) {
           setMask(m);
           setUsingMock(true);
+          setSegmentationError(null);
         }
         return;
       }
@@ -152,6 +167,20 @@ export default function PreviewScreen({
       if (!cancelled) {
         setMask(result.mask);
         setUsingMock(result.usedFallback);
+        if (result.usedFallback && result.error) {
+          // Always log the full chain (message + cause) so logcat has it
+          // even though the UI only shows a truncated one-liner.
+          const cause =
+            result.rawError instanceof Error ? (result.rawError as { cause?: unknown }).cause : undefined;
+          console.warn(
+            '[PreviewScreen] tflite segmentation failed, falling back to mock:',
+            result.error,
+            cause !== undefined ? `\ncause: ${String(cause)}` : ''
+          );
+          setSegmentationError(result.error);
+        } else {
+          setSegmentationError(null);
+        }
       }
     })();
     return () => {
@@ -261,6 +290,22 @@ export default function PreviewScreen({
     ? (photo?.skImage ?? null)
     : recoloredImage;
 
+  const badgeLabel = segmentationError
+    ? 'tflite failed → mock'
+    : usingMock
+      ? 'mock segmentation'
+      : 'tflite segmentation';
+  const truncatedSegmentationError =
+    segmentationError && segmentationError.length > 60
+      ? `${segmentationError.slice(0, 60)}…`
+      : segmentationError;
+
+  const selectedColorIndex = allColors.findIndex((c) => c.id === activeColor.id);
+  // Estimated per-swatch width (see ColorSwatch's `swatchContainer` style:
+  // 64dp width + 10dp marginRight) - close enough for an initial
+  // best-effort scroll-into-view; exact centering isn't required.
+  const SWATCH_ESTIMATED_WIDTH = 74;
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -282,6 +327,12 @@ export default function PreviewScreen({
                 styles.canvasWrapper,
                 { aspectRatio: photo.width / photo.height },
               ]}
+              onLayout={(e) =>
+                setCanvasLayout({
+                  width: e.nativeEvent.layout.width,
+                  height: e.nativeEvent.layout.height,
+                })
+              }
             >
               <Pressable
                 onPressIn={() => setShowOriginal(true)}
@@ -293,8 +344,8 @@ export default function PreviewScreen({
                     image={displayImage}
                     x={0}
                     y={0}
-                    width={photo.width}
-                    height={photo.height}
+                    width={canvasLayout.width || photo.width}
+                    height={canvasLayout.height || photo.height}
                     fit="contain"
                   />
                 </Canvas>
@@ -310,11 +361,14 @@ export default function PreviewScreen({
                 onLongPress={() => setForceMock((f) => !f)}
                 testID="segmenter-badge"
               >
-                <Text style={styles.segmenterBadgeLabel}>
-                  {usingMock ? 'mock segmentation' : 'tflite segmentation'}
-                </Text>
+                <Text style={styles.segmenterBadgeLabel}>{badgeLabel}</Text>
               </Pressable>
             </View>
+            {truncatedSegmentationError && (
+              <Text style={styles.segmentationErrorHint}>
+                tflite failed: {truncatedSegmentationError}
+              </Text>
+            )}
             <Text style={styles.hint}>
               Press and hold the photo to see the original. Long-press the
               badge in the corner to toggle mock ↔ tflite segmentation.
@@ -333,11 +387,20 @@ export default function PreviewScreen({
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 
-        <Text style={styles.sectionLabel}>Color</Text>
+        <Text style={styles.sectionLabel}>Color — {activeColor.displayName}</Text>
         <ScrollView
+          ref={swatchScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.swatchRow}
+          onContentSizeChange={() => {
+            if (selectedColorIndex > 0) {
+              swatchScrollRef.current?.scrollTo({
+                x: selectedColorIndex * SWATCH_ESTIMATED_WIDTH,
+                animated: false,
+              });
+            }
+          }}
         >
           {allColors.map((c) => (
             <ColorSwatch
@@ -463,6 +526,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '600',
+  },
+  segmentationErrorHint: {
+    fontSize: 11,
+    color: '#b00020',
+    textAlign: 'center',
+    marginBottom: 4,
   },
   hint: {
     fontSize: 12,
