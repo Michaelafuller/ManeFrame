@@ -35,12 +35,13 @@ describe('canonical query 2: "short and curly"', () => {
     expect(parsed.textures).toEqual(['curly']);
   });
 
-  it('excludes long styles from the top-scoring results', () => {
+  it('top result is literally short + curly', () => {
     expect(results.length).toBeGreaterThan(0);
     const topScore = results[0].score;
     const topResults = results.filter((r) => r.score === topScore);
     for (const { style } of topResults) {
-      expect(style.lengths).not.toContain('long');
+      expect(style.lengths).toContain('short');
+      expect(style.textures).toContain('curly');
     }
   });
 

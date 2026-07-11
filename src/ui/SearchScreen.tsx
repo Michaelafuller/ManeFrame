@@ -13,31 +13,20 @@ import { loadColors, loadHairstyles } from '../catalog';
 import type { Hairstyle, HairColor } from '../catalog/types';
 import { parseQuery } from '../search/parser';
 import { searchHairstyles, searchColors } from '../search/scorer';
-import { labToCss } from '../color/lab';
+import { ColorSwatch } from './ColorSwatch';
 
 function matchedTags(style: Hairstyle): string[] {
   return [...style.lengths, ...style.fringe, ...style.textures];
 }
 
-function ColorSwatch({ color }: { color: HairColor }) {
-  return (
-    <View style={styles.swatchContainer}>
-      <View
-        style={[styles.swatch, { backgroundColor: labToCss(color.targetLab) }]}
-      />
-      <Text style={styles.swatchLabel} numberOfLines={1}>
-        {color.displayName}
-      </Text>
-    </View>
-  );
-}
-
 function HairstyleResult({
   style,
   colors,
+  onSelectColor,
 }: {
   style: Hairstyle;
   colors: HairColor[];
+  onSelectColor?: (color: HairColor) => void;
 }) {
   return (
     <View style={styles.resultCard}>
@@ -50,7 +39,7 @@ function HairstyleResult({
           style={styles.swatchRow}
         >
           {colors.map((c) => (
-            <ColorSwatch key={c.id} color={c} />
+            <ColorSwatch key={c.id} color={c} onPress={onSelectColor} />
           ))}
         </ScrollView>
       )}
@@ -58,7 +47,11 @@ function HairstyleResult({
   );
 }
 
-export default function SearchScreen() {
+export default function SearchScreen({
+  onSelectColor,
+}: {
+  onSelectColor?: (color: HairColor) => void;
+} = {}) {
   const [query, setQuery] = useState('');
   const allColors = useMemo(() => loadColors(), []);
   const allHairstyles = useMemo(() => loadHairstyles(), []);
@@ -95,7 +88,11 @@ export default function SearchScreen() {
           data={styleResults}
           keyExtractor={(item) => item.style.id}
           renderItem={({ item }) => (
-            <HairstyleResult style={item.style} colors={colorResults} />
+            <HairstyleResult
+              style={item.style}
+              colors={colorResults}
+              onSelectColor={onSelectColor}
+            />
           )}
           ListEmptyComponent={
             <Text style={styles.emptyText}>No matching hairstyles.</Text>
@@ -158,24 +155,6 @@ const styles = StyleSheet.create({
   },
   swatchRow: {
     marginTop: 8,
-  },
-  swatchContainer: {
-    alignItems: 'center',
-    marginRight: 10,
-    width: 64,
-  },
-  swatch: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  swatchLabel: {
-    fontSize: 10,
-    color: '#555',
-    marginTop: 4,
-    textAlign: 'center',
   },
   emptyText: {
     marginTop: 24,

@@ -13,10 +13,10 @@ describe('catalog loading', () => {
     expect(colors).toHaveLength(40);
   });
 
-  it('loads hairstyles without throwing and returns 16 entries', () => {
+  it('loads hairstyles without throwing and returns 18 entries', () => {
     expect(() => loadHairstyles()).not.toThrow();
     const hairstyles = loadHairstyles();
-    expect(hairstyles).toHaveLength(16);
+    expect(hairstyles).toHaveLength(18);
   });
 
   it('returns frozen arrays and entries', () => {

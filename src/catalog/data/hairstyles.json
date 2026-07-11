@@ -345,5 +345,49 @@
       "twists",
       "protective-style"
     ]
+  },
+  {
+    "id": "curly-pixie",
+    "name": "Curly Pixie",
+    "assets": {
+      "front": "assets/hairstyles/curly-pixie/front.webp"
+    },
+    "lengths": [
+      "short"
+    ],
+    "fringe": [
+      "none"
+    ],
+    "textures": [
+      "curly"
+    ],
+    "attributes": [
+      "pixie",
+      "curly",
+      "cropped"
+    ]
+  },
+  {
+    "id": "coily-bob",
+    "name": "Coily Bob",
+    "assets": {
+      "front": "assets/hairstyles/coily-bob/front.webp",
+      "leftThreeQuarter": "assets/hairstyles/coily-bob/left-three-quarter.webp",
+      "rightThreeQuarter": "assets/hairstyles/coily-bob/right-three-quarter.webp"
+    },
+    "lengths": [
+      "chin"
+    ],
+    "fringe": [
+      "none"
+    ],
+    "textures": [
+      "coily"
+    ],
+    "attributes": [
+      "bob",
+      "coily",
+      "natural-texture"
+    ]
   }
 ]

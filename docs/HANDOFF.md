@@ -1,190 +1,157 @@
-# HANDOFF — Iteration 2 (Milestone M2: color math + query parser + search UI)
+# HANDOFF — Iteration 3 (Milestone M3: still-photo preview with mock segmentation + Skia)
 
 **Author:** Fable 5 (planner) · **Executor:** Sonnet 5 · **Date:** 2026-07-10
 
 ## Context
 
-Iteration 1 (commit `0bbec82`) is accepted: Expo SDK 57 TS scaffold, domain
-types in `src/catalog/types.ts`, seed catalogs (40 colors / 16 hairstyles) with
-validated loaders, 22 passing tests. Read `docs/PROGRESS.md` for architecture
-decisions D1–D6. This iteration is **pure TypeScript** — still no native
-modules, no prebuild.
+Iterations 1–2 accepted (commits `0bbec82`, `20711ee`): catalogs, color math
+(`src/color/`), search (`src/search/`), SearchScreen. Read `docs/PROGRESS.md`
+(decisions D1–D6 and the iteration log). This iteration builds the
+still-photo recolor preview using a **mock** segmenter (D3/D5). Everything
+must remain **Expo Go-compatible**: you may add Expo-Go-bundled libraries, but
+still NO `expo prebuild` and NO libraries requiring a custom dev build.
+
+Environment fact: this machine has **no Android emulator and no attached
+device**. Verification is typecheck/lint/tests/export only; do not attempt to
+install an emulator.
 
 ## Scope — do ALL of the following, and NOTHING outside it
 
-### 1. Housekeeping
+### 1. Catalog data fix (carry-forward from Iteration 2)
 
-- In `src/catalog/types.ts`, change the three `Array<...>` fields to `(...)[]`
-  syntax to clear the 3 ESLint warnings. No other type changes. After this,
-  `npm run lint` must report **0 errors, 0 warnings**.
+- Add **2 styles** to `src/catalog/data/hairstyles.json`: a short+curly style
+  (e.g. `curly-pixie`, lengths `["short"]`, textures `["curly"]`) and a
+  chin+coily style (e.g. `coily-bob`). Catalog count 16 → 18; update the
+  count test.
+- Tighten the canonical-query-2 test ("short and curly") to assert the top
+  result is now literally short+curly.
 
-### 2. Color math — `src/color/`
+### 2. Allowed new dependencies (exactly these, latest versions compatible with SDK 57)
 
-All pure functions, no React imports, fully unit-tested.
+- `@shopify/react-native-skia` (bundled in Expo Go)
+- `expo-image-picker`
+- `expo-image-manipulator`
 
-**`src/color/lab.ts`** — colorimetry:
+Install with `npx expo install` so versions match the SDK. Nothing else.
 
-- `srgbToLab(rgb: {r,g,b}): {l,a,b}` and `labToSrgb(lab): {r,g,b}` using the
-  standard sRGB → linear → XYZ (D65) → CIELAB pipeline. RGB channels are
-  0–255 integers at the API boundary; clamp out-of-gamut results into 0–255.
-- `labToCss(lab): string` returning a `#rrggbb` hex string (for UI swatches).
+### 3. Segmentation interface — `src/segmentation/`
 
-**`src/color/depth.ts`** — starting-depth model:
-
-- `estimateStartingLevel(labL: number): 1..10` — map hair luminance to the
-  10-level depth scale consistently with the seed data (natural level 1 ≈ L 9,
-  level 10 ≈ L 80; use linear interpolation with clamping, rounding to the
-  nearest level).
-- `depthGroup(level): "very-dark"|"dark"|"medium"|"light"|"very-light"`
-  (1–2, 3–4, 5–6, 7–8, 9–10).
-
-**`src/color/recolor.ts`** — luminance-preserving recolor reference
-implementation (this exact model is settled; implement it, don't redesign):
+**`src/segmentation/types.ts`**:
 
 ```ts
-export interface RecolorParams {
-  color: HairColor;
-  intensity: number;          // 0..1 user slider, default 1
+export interface HairMask {
+  width: number;            // mask resolution (may be smaller than photo)
+  height: number;
+  data: Float32Array;       // row-major, length = width*height, values 0..1
 }
-// confidence: per-pixel hair probability 0..1 (from segmentation, later)
-export function recolorPixel(
-  original: { r: number; g: number; b: number },
-  params: RecolorParams,
-  confidence: number
-): { r: number; g: number; b: number };
-```
-
-Model:
-1. `origLab = srgbToLab(original)`.
-2. **Chroma**: blend a/b fully toward `color.targetLab` a/b.
-3. **Luminance with lift limiting**: a dye can darken freely but can only
-   *lighten* a limited amount. Compute
-   `maxLift = 12 + 10 * (1 - color.opacity)` (in L units). Target L is
-   `min(color.targetLab.l, origLab.l + maxLift)` when lightening, or
-   `color.targetLab.l` when darkening.
-4. **Highlight retention**: `outL = mix(targetL, origLab.l, color.highlightRetention * 0.5)`
-   — keeps some of the original luminance structure so highlights survive.
-5. Convert back to sRGB, then final blend:
-   `out = mix(original, recolored, color.opacity * confidence * intensity)`.
-
-Export the small helpers (`mix`, the lift computation) so tests can target
-them.
-
-**Tests — `src/color/__tests__/`** (aim ~20+ assertions):
-
-- Round-trip: for a grid of sRGB colors, `labToSrgb(srgbToLab(c))` is within
-  ±2 per channel. Reference points: white → L≈100, black → L≈0,
-  mid-grey (119,119,119) → L≈50±2, a/b≈0 for greys.
-- `estimateStartingLevel`: L 9 → 1, L 80 → 10, L 47 → 6 (matches seed natural
-  shades); clamps below/above.
-- Recolor behavior (use seed catalog shades via `loadColors()`):
-  - Pastel pink (`fashion-pastel-pink`) on a very dark pixel (L≈10) lightens
-    by **at most** the lift limit — output L stays far below the pastel's
-    target L.
-  - Pastel pink on a light-blonde pixel (L≈75) lands near the pastel's target.
-  - Monotonicity: for the same shade, a brighter input pixel yields a
-    brighter output pixel (luminance structure preserved).
-  - `confidence = 0` returns the original pixel exactly; `intensity = 0` too.
-  - Darkening: black dye over blonde reaches the dye's target L (no limit when
-    darkening).
-
-### 3. Query parser + search — `src/search/`
-
-**`src/search/parser.ts`**:
-
-- `parseQuery(text: string): ParsedQuery` where
-
-```ts
-export interface ParsedQuery {
-  lengths: Hairstyle['lengths'];        // matched length terms
-  fringe: Hairstyle['fringe'];          // specific fringe types mentioned
-  requiresFringe: boolean | null;       // true "with bangs", false "without/no bangs", null unsaid
-  textures: Hairstyle['textures'];
-  attributeTerms: string[];             // leftover meaningful tokens (e.g. "bob", "layered")
-  colorFamilies: HairColor['family'][]; // e.g. "red", "copper", "ash"
-  colorTemperature: HairColor['temperature'] | null; // "warm"/"cool"/"neutral"
-  colorLevelHint: 'dark' | 'medium' | 'light' | null; // "dark brown" → dark
+export interface HairSegmenter {
+  readonly name: string;
+  segment(imageWidth: number, imageHeight: number, pixels: Uint8Array | null): Promise<HairMask>;
 }
 ```
 
-- Lowercase tokenization; multi-word synonym matching BEFORE single-token
-  matching (so "curtain bangs" matches as a fringe type, not as the attribute
-  "curtain" + generic "bangs").
-- Negation: "without bangs", "no bangs", "no fringe" → `requiresFringe:false`.
-  "with bangs", "bangs", "fringe" (unqualified) → `requiresFringe:true`.
-- Synonym seeds (extend sensibly): bangs/fringe; shoulder/shoulder-length/
-  collarbone/lob; chin/bob-length; long/waist; short/cropped/pixie-length;
-  wavy/waves/beachy; curly/curls; coily/kinky/afro-textured;
-  straight/sleek; warm/golden; cool/ashy/icy; red/ginger/auburn;
-  copper/orange; blonde→light hint; brunette/brown→medium-or-dark hint;
-  black→dark hint.
-- Stop words ("hair", "with", "and", "a", "the", …) dropped; remaining
-  unrecognized tokens become `attributeTerms`.
+(`pixels` nullable because the mock ignores them; the real tflite segmenter in
+M4 will need them. RGBA byte order, row-major.)
 
-**`src/search/scorer.ts`**:
+**`src/segmentation/mock.ts`** — `MockHairSegmenter`:
 
-- `searchHairstyles(query: ParsedQuery, styles: Hairstyle[]): ScoredHairstyle[]`
-  with `score = lengthMatch*5 + fringeMatch*4 + textureMatch*3 +
-  attributeMatches*1`, where fringeMatch also honors `requiresFringe`
-  (styles whose fringe is exactly `["none"]` are **excluded** when
-  `requiresFringe === true`, and vice versa styles with only bangs options are
-  excluded when `false`). Results sorted by score desc, zero-score results
-  omitted; if the query parses to nothing (all-stop-words), return all styles
-  unranked.
-- `searchColors(query: ParsedQuery, colors: HairColor[]): HairColor[]` —
-  filter by family/temperature/level hint (dark → level ≤ 4, medium 5–7,
-  light ≥ 8). Any of the three absent → unconstrained.
+- Returns a mask at max 256px on the long side (preserving aspect).
+- Shape: a soft "hair cap" — an ellipse centered at (0.5w, 0.38h), radii
+  (0.34w, 0.30h), value 1 inside, falling smoothly (smoothstep) to 0 over an
+  edge band of ~0.08w; additionally carve out a smaller face ellipse centered
+  (0.5w, 0.48h), radii (0.20w, 0.22h) where the mask is multiplied down to
+  ≤0.15 (hairline should survive above the face, cheeks should not recolor).
+  Deterministic, no randomness.
 
-**Tests — `src/search/__tests__/`** against the real seed catalogs. These five
-canonical queries must produce sensible results (assert on ids/properties, not
-brittle exact orderings beyond the top result where stated):
+**Tests — `src/segmentation/__tests__/mock.test.ts`**: dimensions/aspect,
+all values within 0..1, center-top of hair band ≈1, image corners ≈0, face
+center ≤0.15, symmetry about the vertical axis, determinism (two calls equal).
 
-1. `"shoulder length with bangs"` → every result includes `shoulder` length
-   and has a real fringe; no `["none"]`-only styles.
-2. `"short and curly"` → top result is short+curly; no long styles.
-3. `"long straight hair without bangs"` → results long+straight, all
-   fringe-compatible with "no bangs".
-4. `"warm red shoulder-length bob"` → `searchColors` returns only warm
-   red-family shades; style results favor shoulder+bob.
-5. `"dark brown curtain bangs"` → colors filtered to dark levels
-   (level ≤ 4) natural/neutral browns included; styles include curtain-bangs.
+### 4. CPU image recolor — `src/color/recolorImage.ts`
 
-Plus parser unit tests: negation, multi-word synonyms, stop-word-only query,
-empty string.
+```ts
+export function recolorImage(
+  rgba: Uint8Array,            // w*h*4, straight alpha, RGBA
+  width: number, height: number,
+  mask: HairMask,              // may be lower-res; sample nearest-neighbor
+  params: RecolorParams
+): Uint8Array;                 // new buffer, same dims
+```
 
-### 4. Minimal search UI — `src/ui/SearchScreen.tsx` + wire into `App.tsx`
+- Reuses `recolorPixel` per pixel with `confidence = maskSample`.
+- Skip work when maskSample < 0.01 (copy pixel through).
+- Performance: build a per-iteration memo keyed on quantized input color
+  (e.g. 5-bit/channel key → output) — hair regions have few distinct colors,
+  this typically cuts Lab conversions by >90%. Keep it simple (a `Map`).
+- Tests (`src/color/__tests__/recolorImage.test.ts`): synthetic 8×8 image —
+  mask=0 region byte-identical to input; mask=1 region equals direct
+  `recolorPixel` output; alpha channel untouched; nearest-neighbor sampling
+  exercised with a 4×4 mask on the 8×8 image; memo path returns identical
+  results to non-memo path (test both by recoloring an image with repeated
+  colors and comparing against per-pixel recolorPixel).
 
-- A `TextInput` (search box) + results list: each hairstyle result shows name
-  + its matched tags; below it, a horizontal row of matching color swatches
-  (background color from `labToCss(color.targetLab)`, label = displayName).
-- Debounce is unnecessary; parse on every change (catalog is tiny).
-- Keep styling minimal but not broken (SafeAreaView, dark-on-light). No
-  navigation library — `App.tsx` renders `SearchScreen` directly.
-- This must work in plain `expo start` (no native modules).
+### 5. Preview screen — `src/ui/PreviewScreen.tsx`
 
-### 5. Verification (mandatory before writing SUMMARY.md)
+Flow:
+
+1. "Pick a photo" button → `expo-image-picker` (media library; also offer
+   camera if permission granted — both behind one small chooser).
+2. Downscale via `expo-image-manipulator` to max 768px long side (JPEG).
+3. Decode to pixels **with Skia**: `Skia.Data.fromURI` →
+   `Skia.Image.MakeImageFromEncoded` → `readPixels()` (RGBA_8888). No other
+   decoding path.
+4. Run `MockHairSegmenter` → `recolorImage` with the selected catalog color →
+   `Skia.Image` from the recolored pixels (`Skia.Image.MakeImage` with
+   matching ImageInfo) → draw original and recolored side-by-side-toggleable
+   (a "before/after" press-and-hold: show original while pressed).
+5. Controls: horizontal swatch row (reuse the swatch look from SearchScreen;
+   selecting a color re-runs recolor), and intensity presets — three buttons
+   `Subtle 0.5 / Natural 0.8 / Bold 1.0` (no slider dependency).
+6. Recolor runs are async (wrap the pixel loop in `await new Promise(r =>
+   setTimeout(r,0))` chunks every ~50k pixels so JS thread isn't frozen);
+   show a simple "Processing…" state; ignore stale results if the user
+   switches colors mid-run (token/sequence check).
+
+**App shell**: replace App.tsx's direct SearchScreen render with a minimal
+two-tab switcher (plain Pressables in a bottom bar: "Search" / "Preview") —
+still no navigation library. Selecting a hairstyle in Search does nothing new
+yet (M6 wires styles); selecting a *color swatch* in Search should switch to
+Preview with that color preselected (lift selected-color state into App.tsx).
+
+### 6. UI smoke tests
+
+- `src/ui/__tests__/` — with `@testing-library/react-native` (add as
+  dev-dependency; it works with jest-expo): render App, assert both tabs
+  render and switching tabs shows PreviewScreen's "Pick a photo" button.
+  Mock `expo-image-picker`/`expo-image-manipulator`/Skia modules minimally
+  (jest module mocks) — do NOT attempt to exercise real Skia in Jest; the
+  pixel pipeline is already covered by pure-function tests.
+
+### 7. Verification (mandatory before writing SUMMARY.md)
 
 ```
 npm run typecheck   # clean
 npm run lint        # 0 errors, 0 warnings
-npm test            # all pass (old 22 + new suites)
-npx expo export --platform android   # bundles cleanly
+npm test            # all suites pass
+npx expo export --platform android   # bundles cleanly with Skia + pickers
 ```
 
-### 6. Commit
+If `@shopify/react-native-skia` breaks the Metro/export step in any way,
+STOP, do not work around it with hacks — document precisely what failed in
+SUMMARY.md and mark the iteration blocked (this is decision-relevant for the
+planner: it would mean Skia must move behind a dev build, changing D3).
 
-Stage the pre-existing `docs/SUMMARY.md` changes along with your work. One
-commit: `Iteration 2: color math, query parser, search UI`.
+### 8. Commit
 
-## Deliverable back to Fable 5
-
-Overwrite `docs/SUMMARY.md` with the Iteration-2 report: same five sections as
-Iteration 1 (scope-item mapping, deviations, verbatim verification output,
-file inventory, known issues/suggestions).
+Stage everything including the previous `docs/SUMMARY.md` state, one commit:
+`Iteration 3: still-photo preview, mock segmentation, Skia pipeline`.
+Then overwrite `docs/SUMMARY.md` with the Iteration-3 report (left
+uncommitted), same five sections as before.
 
 ## Hard constraints
 
-- Do not edit `docs/HANDOFF.md`, `docs/PROGRESS.md`, or anything in `.claude/`.
-- No native-module libraries, no prebuild, no network calls, no new runtime
-  dependencies at all (dev-deps only if genuinely needed).
-- Do not push, and do not create a GitHub repo.
+- Do not edit `docs/HANDOFF.md`, `docs/PROGRESS.md`, or `.claude/`.
+- No `expo prebuild`; only the three runtime deps listed (plus
+  `@testing-library/react-native` as dev-dep).
+- No network calls at runtime; no analytics.
+- Do not push, do not create a GitHub repo, do not install an emulator.

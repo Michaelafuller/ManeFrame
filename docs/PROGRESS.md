@@ -83,3 +83,24 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
   (AGENTS.md, LICENSE, template .git) deliberately excluded.
 - Carry-forward: Lab/opacity/highlightRetention values are hand-authored
   placeholders, to be sanity-checked when M2 color math consumes them.
+
+### Iteration 2 — ACCEPTED (2026-07-10) — M2 complete
+
+- Commit `20711ee`: Lab colorimetry (`src/color/lab.ts`), depth model,
+  luminance-preserving `recolorPixel` (settled 5-step model implemented
+  verbatim), query parser + weighted scorer, minimal SearchScreen UI.
+- Reviewer verification (independent re-run): typecheck clean, lint 0/0,
+  88/88 tests, `expo export --platform android` bundles (586 modules);
+  `recolor.ts` read line-by-line against the spec — conforms.
+- Two disclosed test softenings accepted as legitimate: (a) seed catalog has
+  no short+curly style, so canonical query 2 can't have a literal
+  short+curly top result; (b) additive scoring means "every result is
+  shoulder-length" can't hold literally for query 1. Both trace to
+  planner-side spec/data gaps, not executor shortcuts.
+- Carry-forward: add a short+curly hairstyle to the catalog (Iteration 3) and
+  tighten the query-2 test back to a literal top-result assertion;
+  loose substring attribute matching in scorer.ts is fine at 16 styles but
+  should be tightened if the catalog grows.
+- Environment note: no Android AVD or physical device available on this
+  machine — visual verification stays at bundler/unit-test level until the
+  user provides one.
