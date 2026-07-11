@@ -45,6 +45,15 @@ one is installed changes what `npm run e2e` is actually testing:
 | **Dev-client + Metro** | An EAS `development`-profile APK (needs `expo-dev-client`) | The Expo **dev-launcher** screen (a picker/menu), not the app — *unless* you've already deep-linked it into a running Metro bundle this session | Fast JS iteration against a running Metro server. Flows will fail at `assertVisible` on launch because `clearState`/`launchApp` reopens the dev-launcher, not the last-loaded bundle. |
 | **Preview standalone** | An EAS `preview`-profile APK | ManeFrame directly — no dev-launcher, no Metro dependency, release JS bundle | **The acceptance gate.** This is the only mode where `npm run e2e` results mean anything about real app behavior. |
 
+> **⚠️ The dev client is temporarily STALE (as of Iteration 4R-3,
+> 2026-07-11).** 4R-3 added `react-native-safe-area-context` — a *native*
+> module — and rebuilt only the **preview** profile. The last dev-client
+> build (`68834a2f`) predates it, so loading current JS through that dev
+> client via Metro will error at startup (the bundle requires a native
+> module that APK doesn't contain). Don't debug that error — it's
+> expected. The dev client becomes usable again after M5's natural
+> dev-client rebuild (M5 adds VisionCamera, forcing one anyway).
+
 To connect the dev-client mode to Metro for manual iteration (not for
 `npm run e2e` acceptance runs):
 
@@ -90,10 +99,10 @@ maestro test flows/ --format junit --output flows/results.xml
 
 ## Coverage
 
-| Area | Flow file | Automated? | Last acceptance run (preview build, 2026-07-11) |
+| Area | Flow file | Automated? | Last acceptance run (preview build `ffa74b55`, 2026-07-11) |
 |---|---|---|---|
-| App launches, both tabs reachable (the Iteration-4 crash signature) | `flows/00-launch.yaml` | Yes | **FAILED** — `assertVisible: "ManeFrame"` times out. This is a real on-device defect, not a flow bug: the title `Text` renders with visibly corrupted/overlapping glyphs on every cold launch and never gets a matching accessibility node at all (`maestro hierarchy` shows zero TextView between the status bar and the search box). See SUMMARY.md "Known issues" for full evidence (logcat, hierarchy dump, zoomed screenshot). |
-| Search: text query -> parser -> scorer -> results render (hairstyle + color) | `flows/01-search.yaml` | Yes | **PASSED** (after an on-device fix to the flow itself — see below) |
+| App launches, both tabs reachable (the Iteration-4 crash signature) | `flows/00-launch.yaml` | Yes | **PASSED** — the 4R-2 "corrupted title" failure was the Android status bar drawn over the title (edge-to-edge + RN `SafeAreaView` being a no-op on Android), fixed in 4R-3 by `react-native-safe-area-context`. The title now has a normal accessibility node below the status bar. |
+| Search: text query -> parser -> scorer -> results render (hairstyle + color) | `flows/01-search.yaml` | Yes | **PASSED** |
 | Preview tab renders, "Pick a photo" entry point visible | `flows/02-preview-mock-badge.yaml` | Yes | **PASSED** |
 | Photo picking (library picker / camera intent) | — | No — system picker UI is outside the app's accessibility tree; Maestro cannot drive it deterministically. Manual: pick a photo, confirm it decodes and renders in the Canvas. |
 | Segmentation quality (mask actually follows hair, not face/background) | — | No — visual judgment call, not a text/accessibility assertion. Manual: check the recolored region tracks hair boundaries on a real photo. |
