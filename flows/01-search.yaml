@@ -3,9 +3,21 @@ appId: com.maneframe.app
 # catalog (18 hairstyles / 40 colors). "Curly Pixie" is the catalog's only
 # short+curly hairstyle, so it is guaranteed to be the (sole) top result for
 # "short and curly" (see src/search/__tests__/scorer.test.ts, canonical
-# query 2). "warm red" has no length/texture hint, so all hairstyle cards
-# render (unranked) each carrying the same color-swatch row, filtered to the
-# 4 warm-red-family shades ("Dark Red Brown", "Red Brown", "Medium Auburn",
+# query 2).
+#
+# The second query MUST include a length/fringe/texture/attribute hint, not
+# just a color hint. searchHairstyles (src/search/scorer.ts) only returns
+# "all styles unranked" when the ENTIRE query is empty (isEmptyQuery); a
+# color-only query like "warm red" has a non-null colorTemperature, so it
+# takes the scored path instead, every style scores exactly 0 (no length/
+# fringe/texture/attribute term to match against), and "zero-score results
+# are omitted" (scorer.ts docstring) — so NO hairstyle cards, and therefore
+# NO color swatches, render at all. (Confirmed on-device: "warm red" alone
+# renders "0 hairstyles · 4 colors" / "No matching hairstyles.".) Using the
+# canonical query 4 from scorer.test.ts ("warm red shoulder-length bob")
+# instead guarantees at least one style match (favors shoulder + bob), so
+# its card renders with the color-swatch row filtered to the 4 warm-red-
+# family shades ("Dark Red Brown", "Red Brown", "Medium Auburn",
 # "Strawberry Blonde") — "Strawberry Blonde" is asserted as one of them.
 ---
 - launchApp:
@@ -19,5 +31,5 @@ appId: com.maneframe.app
 - tapOn:
     id: "search-input"
 - eraseText: 30
-- inputText: "warm red"
+- inputText: "warm red shoulder-length bob"
 - assertVisible: "Strawberry Blonde"

@@ -42,3 +42,7 @@ yarn-error.*
 
 # test coverage
 coverage/
+
+# downloaded EAS build artifacts (large binaries, not source)
+*.apk
+*.aab

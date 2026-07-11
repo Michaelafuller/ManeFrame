@@ -1,14 +1,10 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <testsuites>
-  <testsuite name="Test Suite" device="0A131FDD4006VE" tests="3" failures="3" time="64.0">
-    <testcase id="00-launch" name="00-launch" classname="00-launch" file="flows\00-launch.yaml" time="22.0" status="ERROR">
-      <failure>Assertion is false: "Search" is visible</failure>
+  <testsuite name="Test Suite" device="0A131FDD4006VE" tests="3" failures="1" time="60.0">
+    <testcase id="00-launch" name="00-launch" classname="00-launch" file="flows\00-launch.yaml" time="24.0" status="ERROR">
+      <failure>Assertion is false: "ManeFrame" is visible</failure>
     </testcase>
-    <testcase id="01-search" name="01-search" classname="01-search" file="flows\01-search.yaml" time="21.0" status="ERROR">
-      <failure>Element not found: Id matching regex: search-input</failure>
-    </testcase>
-    <testcase id="02-preview-mock-badge" name="02-preview-mock-badge" classname="02-preview-mock-badge" file="flows\02-preview-mock-badge.yaml" time="21.0" status="ERROR">
-      <failure>Element not found: Text matching regex: Preview</failure>
-    </testcase>
+    <testcase id="01-search" name="01-search" classname="01-search" file="flows\01-search.yaml" time="29.0" status="SUCCESS"/>
+    <testcase id="02-preview-mock-badge" name="02-preview-mock-badge" classname="02-preview-mock-badge" file="flows\02-preview-mock-badge.yaml" time="7.0" status="SUCCESS"/>
   </testsuite>
 </testsuites>
