@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
   FlatList,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { loadColors, loadHairstyles } from '../catalog';
 import type { Hairstyle, HairColor } from '../catalog/types';
@@ -67,7 +67,7 @@ export default function SearchScreen({
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
         <Text style={styles.title}>ManeFrame</Text>
         <TextInput

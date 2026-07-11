@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SearchScreen from './src/ui/SearchScreen';
 import PreviewScreen from './src/ui/PreviewScreen';
@@ -8,9 +9,10 @@ import type { HairColor } from './src/catalog/types';
 
 type Tab = 'search' | 'preview';
 
-export default function App() {
+function AppContent() {
   const [tab, setTab] = useState<Tab>('search');
   const [selectedColor, setSelectedColor] = useState<HairColor | null>(null);
+  const insets = useSafeAreaInsets();
 
   function handleSelectColor(color: HairColor) {
     setSelectedColor(color);
@@ -26,7 +28,7 @@ export default function App() {
           <PreviewScreen selectedColor={selectedColor} />
         )}
       </View>
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
         <Pressable
           style={styles.tabButton}
           onPress={() => setTab('search')}
@@ -46,6 +48,14 @@ export default function App() {
       </View>
       <StatusBar style="auto" />
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
   );
 }
 
