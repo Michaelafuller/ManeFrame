@@ -114,6 +114,28 @@ function loadModel(): Promise<TfliteModel> {
   return modelPromise;
 }
 
+/**
+ * Dev-only diagnostic: min/max/mean over `values` (or a `sampleCount`-sized
+ * prefix, to keep this cheap on a 256*256*6 ≈ 393k-value output tensor).
+ * Never runs in production - every call site is gated by `if (__DEV__)`.
+ */
+function statsOf(
+  values: Float32Array,
+  sampleCount: number = values.length
+): { min: number; max: number; mean: number; n: number } {
+  const n = Math.min(sampleCount, values.length);
+  let min = Infinity;
+  let max = -Infinity;
+  let sum = 0;
+  for (let i = 0; i < n; i++) {
+    const v = values[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+    sum += v;
+  }
+  return { min, max, mean: n > 0 ? sum / n : NaN, n };
+}
+
 export class TfliteHairSegmenter implements HairSegmenter {
   readonly name = 'tflite-hair-segmenter';
 
@@ -150,14 +172,27 @@ export class TfliteHairSegmenter implements HairSegmenter {
     }
 
     let outputs: ArrayBuffer[];
+    let inputTensor: Float32Array;
     try {
-      const inputTensor = buildSegmenterInputTensor(
+      inputTensor = buildSegmenterInputTensor(
         pixels,
         imageWidth,
         imageHeight,
         inputSize,
         inputChannels as 3 | 4
       );
+      if (__DEV__) {
+        // H1 check: input normalization. RGB in [0,1] should show
+        // min>=0, max<=1, mean roughly in [0.1, 0.9] for a typical photo.
+        // A near-constant 0/near-zero tensor here would point at a decode
+        // or resize bug upstream, not the model contract.
+        const s = statsOf(inputTensor, 1000);
+        console.log(
+          `[tflite][diag] input tensor stats (first ${s.n}/${inputTensor.length}): ` +
+            `min=${s.min.toFixed(4)} max=${s.max.toFixed(4)} mean=${s.mean.toFixed(4)} ` +
+            `byteLength=${inputTensor.buffer.byteLength} expectedBytes=${inputTensor.length * 4}`
+        );
+      }
       outputs = await model.run([inputTensor.buffer as ArrayBuffer]);
     } catch (e) {
       throw new TfliteSegmentationError('Hair segmentation inference failed.', e);
@@ -181,7 +216,48 @@ export class TfliteHairSegmenter implements HairSegmenter {
       );
     }
 
-    return tensorToHairMask(
+    if (__DEV__) {
+      // H2 check: output activation. Per-channel mean tells us whether any
+      // channel looks like a sane logit/probability range at all. The
+      // decisive check is the per-pixel cross-channel sum on a handful of
+      // sample pixels: sum ~= 1.0 everywhere => graph already ends in
+      // softmax (MODEL_OUTPUTS_ARE_PROBABILITIES should be true, not
+      // false); sum wildly not 1.0 (e.g. large/negative logits) => raw
+      // logits, current `false` setting is correct.
+      const pixelCount = outWidth * outHeight;
+      const channelMeans: number[] = [];
+      for (let c = 0; c < outChannels; c++) {
+        let sum = 0;
+        for (let i = 0; i < pixelCount; i++) {
+          sum += outputData[i * outChannels + c];
+        }
+        channelMeans.push(sum / pixelCount);
+      }
+      console.log(
+        `[tflite][diag] output per-channel means (${outChannels} channels): ` +
+          channelMeans.map((m, c) => `ch${c}=${m.toFixed(4)}`).join(' ')
+      );
+      const sampleIdxs = [
+        0,
+        Math.floor(pixelCount / 4),
+        Math.floor(pixelCount / 2),
+        Math.floor((pixelCount * 3) / 4),
+        pixelCount - 1,
+      ];
+      const sums = sampleIdxs.map((i) => {
+        const base = i * outChannels;
+        let sum = 0;
+        for (let c = 0; c < outChannels; c++) sum += outputData[base + c];
+        return sum;
+      });
+      console.log(
+        `[tflite][diag] per-pixel cross-channel sum on ${sampleIdxs.length} sample pixels ` +
+          `(≈1.0 everywhere => already softmaxed => H2 confirmed): ` +
+          sums.map((s) => s.toFixed(4)).join(', ')
+      );
+    }
+
+    const mask = tensorToHairMask(
       outputData,
       outWidth,
       outHeight,
@@ -189,6 +265,20 @@ export class TfliteHairSegmenter implements HairSegmenter {
       MODEL_HAIR_CHANNEL,
       MODEL_OUTPUTS_ARE_PROBABILITIES
     );
+
+    if (__DEV__) {
+      const s = statsOf(mask.data);
+      let above = 0;
+      for (let i = 0; i < mask.data.length; i++) {
+        if (mask.data[i] > 0.5) above++;
+      }
+      console.log(
+        `[tflite][diag] final mask stats: min=${s.min.toFixed(4)} max=${s.max.toFixed(4)} ` +
+          `mean=${s.mean.toFixed(4)} fraction>0.5=${(above / mask.data.length).toFixed(4)}`
+      );
+    }
+
+    return mask;
   }
 }
 
