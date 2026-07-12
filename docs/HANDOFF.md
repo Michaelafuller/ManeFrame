@@ -1,105 +1,77 @@
-# HANDOFF — Iteration 5 (Milestone M6: hairstyle overlay try-on, MVP)
+# HANDOFF — Iteration 5R (M6 remediation: real-hair donor overlays)
 
-**Author:** Fable 5 (planner) · **Status: READY**
+**Author:** Fable 5 (planner) · **Status: READY (pending user approval of donor-photo downloads — the main session will relay it)**
 
-## Why this is next
+## What stands, what's rejected
 
-User accepted Phase 1 (color engine works on both capture paths). User
-decision 2026-07-11: M6 (style overlays) jumps ahead of M5 (live camera)
-— style try-on is their primary use case, and note the primary user is
-bald: the overlay must look right on a hairless head (which is actually
-the clean case — no existing hair to fight), and "no hair detected" must
-never read as an error.
+Iteration 5's engineering is ACCEPTED and stays: placement engine,
+`segmentBoth`, overlay recolor pipeline, Preview/Search wiring, hints,
+dev flows, tests. The six self-authored SVG overlays are REJECTED on
+planner visual review: they render as blobs/bars that don't read as hair
+and partially occlude the face (see docs/evidence/iter5-style-*.png), and
+non-uniform scaling stretches them. Do not iterate on the SVG art — the
+technique is retired.
 
-## Ground truth you must know
+## New approach: donor-hair extraction (use the pipeline we already trust)
 
-- The catalog (`src/catalog/data/hairstyles.json`) references
-  `assets/hairstyles/**.webp` — **none of these files exist**. Art is the
-  critical path.
-- Segmentation gives more than hair: `selfie_multiclass` channel 3 is
-  **face-skin** — use it for head detection/placement. Channel 1 = hair,
-  0 = background. The tensor pipeline (`tensorToHairMask`) currently
-  extracts only one channel; you will need a second mask (face) — extend
-  shape-driven, keep pure-TS + unit-tested.
-- JS-only constraint this iteration: NO new native dependencies (dev
-  client `32841af6` must stay valid; no gesture-handler — use button
-  nudge controls instead). Budget: exactly 1 EAS preview build at the
-  end (6 of 15 remain; leave ≥5).
+For each style, cut REAL hair out of a properly licensed donor portrait
+using our own segmentation, and ship the cutout as the overlay:
 
-## Work order
+1. **Donor photos.** 6 front-facing CC0 / public-domain portraits, one
+   per catalog style id (pixie-crop, buzz-cut, classic-bob, classic-lob,
+   long-beach-waves, curly-shag), hair fully inside the frame, decent
+   resolution (≥800px face). Wikimedia Commons / other PD-CC0 sources.
+   Record source URL + license per donor in a new docs/ART.md.
+   **Downloads require user approval — before fetching anything, send the
+   main session the full list (per file: style id, URL, license, approx
+   size) and wait.** If a style has no acceptable donor, report the gap
+   rather than lowering the licensing or quality bar.
+2. **Extraction (on-device, one-time).** Host can't run TFLite (disk
+   budget), but the phone can: extend the __DEV__ diagnostics with an
+   "extract donor assets" action that, for each bundled donor image,
+   runs `segmentBoth`, computes the hair cutout (RGBA: donor pixels ×
+   feathered hair-alpha; feather = small blur on the mask edge, pick
+   radius by eye), crops to the hair bounding box, and records the
+   donor's face box in cutout-relative normalized coords. Save PNGs +
+   a JSON of anchors to app document storage; `adb pull`; convert to
+   webp if smaller; commit as `assets/hairstyles/<id>/front.webp` +
+   catalog `headBox` anchors. The donor originals do NOT ship in the
+   app binary — only the cutouts (keep the originals in a gitignored
+   local folder; ART.md records their provenance).
+3. **Placement changes.** UNIFORM scale only: scale = target face-box
+   width / donor face-box width; anchor by aligning the two face boxes'
+   top-centers. Drop the non-uniform stretch path entirely. Keep nudge
+   controls and edge clamping.
+4. **Machine gate for face occlusion.** Unit test over every shipped
+   overlay: place it on a synthetic face box per its anchors and assert
+   overlay alpha coverage inside the face box is < 20%. This encodes
+   "hair must not sit on the face" so no future art regression passes
+   CI silently.
+5. **Quality pass on the recolor interaction.** Donor cutouts have real
+   luminance, so the existing Lab recolor should look natural — verify
+   teal-bold and a natural shade on the bundled portrait per style.
+6. **Evidence for planner review — BEFORE any EAS build.** All six
+   styles on the bundled test portrait (iter5r- prefix), one teal-bold,
+   one natural-shade, the no-face hint, and one style on a bald/no-hair
+   subject if you can produce one via the camera path pointed at the
+   no-face test image swapped for... skip if impractical; note it.
+   STOP after committing evidence and ask the main session for planner
+   review sign-off.
+7. **Only after sign-off:** cancel the hung EAS build
+   `80a980d7-229c-405e-8dde-7668068e904e` (`eas build:cancel`) — it may
+   block the queue — then submit the ONE preview build, request
+   download+install approval, full `npm run e2e`, SUMMARY.md
+   "Iteration 5R" section.
 
-1. **Overlay art (self-authored, stylized).** Author a starter set of 6
-   styles as in-repo SVG (or Skia-drawable path data): pixie, buzz, bob,
-   shoulder-straight, long-wavy, curly — matching existing catalog ids.
-   Design constraints:
-   - Front-facing, neutral brown luminance ramp (mid-L with believable
-     shading structure) so the EXISTING color engine can recolor it:
-     treat overlay alpha as the confidence input to `recolorPixel`.
-   - Each asset carries anchor metadata: a normalized `headBox`
-     (`{x,y,w,h}` in overlay coordinates) marking where the wearer's
-     face-skin region should sit under it.
-   - Consistent art style across all 6 beats photo-real mismatch. We own
-     the copyright; no external art downloads, no AI-generation services.
-   - Catalog: point the 6 entries' `assets.front` at the real files;
-     styles without art yet must be filtered out of try-on (still
-     searchable, marked "art coming soon" on the card).
-2. **Placement engine (pure TS, unit-tested).** From the face-skin mask:
-   bounding box (threshold 0.5, largest connected region is fine —
-   simple flood fill), expand to a head box (scalp extends above the
-   face box ~40–60% of its height), then compute the affine transform
-   mapping the overlay's `headBox` onto it. Handle: no face detected
-   (return null → UI hint "No face detected — try a front-facing
-   photo"), off-center faces, and faces near frame edges (clamp).
-3. **Preview UI.** Style chip row (from catalog, art-bearing styles
-   only) + "None". Selected style renders as a Skia image layer over the
-   photo at the computed transform, recolored by the active color and
-   intensity through the same Lab pipeline. Nudge controls (dp buttons:
-   move/scale, plus reset) for manual correction — keep them minimal.
-   Search screen: tapping a style card carries the style (and color, as
-   today) into Preview.
-4. **"No hair detected" hint (backlog item, release-visible).** When no
-   style is selected AND the hair mask's fraction>0.5 is < 0.5%, show a
-   neutral hint: "No hair detected in this photo — pick a style to try
-   one on." (On this user's selfies that's the normal path, and it now
-   advertises the new feature instead of looking broken.)
-5. **Tests + E2E.** Unit: mask→face-box, transform math, catalog
-   integrity (art-bearing styles have anchors; files exist). Maestro:
-   extend the dev flows — bundled portrait + style applied + recolored
-   (assert an on-screen dev stat, e.g. overlay box "style: bob @
-   x,y,w,h", plus screenshot); camera desk-photo path must show the
-   no-face hint rather than an error. Full `flows/` set must stay green.
-6. **Evidence + build.** Screenshots: each of the 6 styles rendered on
-   the bundled portrait (one grid or six shots), one recolored variant,
-   and the no-face hint. Then ONE preview EAS build, install on the
-   user's phone (adb install of your own EAS artifact — ask the main
-   session for download approval first, listing file/source/size), run
-   full e2e against it. SUMMARY.md report as usual.
+## Constraints (unchanged from Iteration 5 unless noted)
 
-## Known limitation to document (not solve)
-
-Subjects with existing long hair will have real hair sticking out from
-under shorter overlay styles. Out of scope (inpainting territory). Note
-it in SUMMARY and the app hint text if a style is much smaller than the
-detected hair region. The primary user's bald case is unaffected.
-
-## Backlog (do NOT do this iteration)
-
-- Camera-capture UX polish (user: "leaves a little to be desired" —
-  lighting/highlight quality gap vs library photos; likely needs capture
-  resolution/exposure work).
-- Pinch/rotate gestures (needs gesture-handler → native dep → bundle
-  with M5's dev-client rebuild).
-- M5 live camera (next after this; see PROGRESS for the
-  temporal-smoothing note — selfie_multiclass has no mask-feedback input
-  channel, use output-side EMA).
-
-## Standing constraints (unchanged)
-
-- Loop protocol per docs/PROGRESS.md; executor never edits HANDOFF /
-  PROGRESS / REMEDIATION / .claude/. Report → docs/SUMMARY.md
-  ("Iteration 5" section).
-- Automation never opens/browses the photo library. Bundled portrait +
-  camera captures only.
-- D1–D7; no hand-written native code; no push/analytics/runtime network
-  calls; no Expo credentials beyond `eas whoami` / `eas build`.
-- Host disk ~2.9 GB free: no heavy installs; delete APKs after install.
+- JS/asset-only; dev client 32841af6 remains the iteration vehicle.
+- Never edit HANDOFF/PROGRESS/REMEDIATION/.claude; never browse the
+  phone's photo library; APK downloads need main-session approval with
+  file/source/size; delete APKs after install; disk ~3 GB free — donor
+  photos are small but clean up intermediates; commit incrementally
+  ("Iteration 5R:" prefix); npm test + tsc + eslint + dev flows green
+  before requesting review.
+- EAS: build #10 hung (does not produce an artifact); after cancel, the
+  resubmit becomes #11 of 15 — approved by planner as within budget
+  (floor relaxed to ≥4 remaining for this remediation).

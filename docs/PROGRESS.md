@@ -302,3 +302,31 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
 - **Roadmap reorder (user decision, 2026-07-11): M6 (hairstyle overlays)
   moves BEFORE M5 (live camera).** Style try-on is the user's primary
   use case. Iteration 5 = M6 MVP per HANDOFF.
+
+### Iteration 5 — planner review: engineering ACCEPTED, art REJECTED (2026-07-12) → 5R
+
+- Executor delivered commits 191c469…a9d57ae: placement engine (17
+  tests), `segmentBoth` face+hair masks in one inference, 6 authored SVG
+  overlays, overlay recolor via alpha-as-confidence, full Preview/Search
+  wiring, hints, dev flows 04/05/06 (3/3 green), 185/185 unit tests.
+- **Planner visual review of evidence FAILED the art**: overlays render
+  as non-hair-like blobs (pixie = floating blob above the head; bob/lob
+  = vertical bars over the cheeks), partially occluding the face, and
+  non-uniform head-box scaling stretches them further. All machine
+  checks passed while the visual bar failed — self-authored SVG hair was
+  the wrong technique (planner's call in the work order, not executor
+  error). Evidence: docs/evidence/iter5-style-*.png.
+- **Lesson recorded:** "flows passed" ≠ "looks right". Any future
+  iteration whose deliverable is visual must gate on planner image
+  review BEFORE spending an EAS build, and should carry a
+  machine-checkable no-face-occlusion invariant.
+- The single budgeted EAS build (80a980d7, #10 of 15) hung server-side
+  (IN_PROGRESS 2+ h, updatedAt frozen at creation +7 s; no Expo
+  incident). Silver lining: nothing was spent on rejected art. It must
+  be canceled before the next submit (possible single-concurrency
+  block).
+- **Iteration 5R ordered:** replace authored art with donor-hair
+  extraction — segment CC0/PD donor portraits with our own on-device
+  pipeline, cut real hair to soft-alpha overlays anchored by the donor's
+  detected face box; uniform scale only; face-occlusion unit gate. See
+  HANDOFF.
