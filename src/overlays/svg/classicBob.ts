@@ -2,12 +2,13 @@ import { svgWrapper } from './shared';
 
 /**
  * Classic Bob — chin-length, blunt ends, straight, symmetric coverage down
- * to the jawline. Same evenodd cap-minus-face-oval construction as the
- * other five styles.
+ * to the jawline. Single closed path: outer cap-and-sides silhouette,
+ * inner boundary tracing the hairline across the forehead and down past
+ * the cheeks (the enclosed region is exactly the hair). See pixieCrop.ts
+ * for why there is deliberately no face-oval cutout subpath.
  */
 export const CLASSIC_BOB_SVG = svgWrapper(`
   <path
-    fill-rule="evenodd"
     fill="url(#hairGrad)"
     d="
       M160,190
@@ -23,12 +24,6 @@ export const CLASSIC_BOB_SVG = svgWrapper(`
       C196,340 192,352 184,352
       C172,352 164,345 162,330
       C158,280 156,230 160,190
-      Z
-      M368,230
-      C368,299.04 317.86,355 256,355
-      C194.14,355 144,299.04 144,230
-      C144,160.96 194.14,105 256,105
-      C317.86,105 368,160.96 368,230
       Z
     "
   />

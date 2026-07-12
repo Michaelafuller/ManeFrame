@@ -1,0 +1,91 @@
+appId: com.maneframe.app
+# Hairstyle overlay try-on acceptance on the bundled CC0 test portrait
+# (Iteration 5 / M6). Loads the bundled portrait via the dev diagnostic
+# button (see flows-dev/04-portrait-recolor.yaml for why that exists and
+# the privacy rule it upholds), selects the Classic Bob style chip,
+# asserts the machine-checkable overlay placement stat ("style:
+# classic-bob @ x,y,w,h" - rendered only when the placement engine
+# actually produced a transform), recolors with Teal @ Bold 1.0 through
+# the same Lab pipeline, exercises the nudge controls, and screenshots.
+#
+# *** DEV-MODE ONLY - NOT part of `npm run e2e`. *** The dev diagnostic
+# button and both stat lines are `__DEV__`-gated. Run protocol (Metro +
+# deep link first - no `launchApp`): see 04-portrait-recolor.yaml's
+# header comment; `npm run e2e:dev` runs the whole flows-dev/ directory.
+#
+# Layout note: selecting a style adds the nudge row, which can push the
+# style chips below the fold - hence the scrollUntilVisible before the
+# chip tap and the full-screen swipes (direction DOWN = back to top)
+# before each stat assertion/screenshot.
+---
+- extendedWaitUntil:
+    visible: "Search"
+    timeout: 90000
+- tapOn: "Preview"
+- extendedWaitUntil:
+    visible: "[dev] Load bundled test portrait"
+    timeout: 15000
+- tapOn: "[dev] Load bundled test portrait"
+# First segmentation in a session also loads + prepares the 16.4 MB
+# tflite model; generous timeout. NOTE: Maestro text selectors are
+# FULL-string regex matches - "hair px" never matches "hair px: 11.0%".
+- extendedWaitUntil:
+    visible: "hair px: .*"
+    timeout: 90000
+- assertVisible: "tflite segmentation"
+- assertNotVisible: "tflite failed.*"
+# Select the Classic Bob style chip (wrapped chip group between the
+# dev buttons and the color swatches).
+- scrollUntilVisible:
+    element:
+      text: "Classic Bob"
+    direction: DOWN
+- tapOn: "Classic Bob"
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+# Machine-checkable placement stat: rendered only when a style is active
+# AND the placement engine produced a transform from the face-skin mask.
+- extendedWaitUntil:
+    visible: "style: classic-bob @ .*"
+    timeout: 30000
+- assertVisible: "style: classic-bob @ -?\\d+,-?\\d+,\\d+,\\d+"
+# The no-face hint must NOT be showing (the bundled portrait has a face).
+- assertNotVisible: "No face detected.*"
+- extendedWaitUntil:
+    notVisible: "Processing…"
+    timeout: 30000
+- takeScreenshot: flows-dev/05-style-overlay-classic-bob
+# Recolor overlay + hair: Teal @ Bold 1.0 (same scroll-to-bottom + swipe
+# technique as flow 04 - see its comment for the geometry).
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- repeat:
+    times: 12
+    commands:
+      - swipe:
+          start: 85%, 73%
+          end: 10%, 73%
+- tapOn: "Teal"
+- tapOn: "Bold 1.0"
+- extendedWaitUntil:
+    notVisible: "Processing…"
+    timeout: 30000
+- assertVisible: "Color — Teal"
+# Back to the top: recolored canvas + stat + nudge controls all visible.
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- assertVisible: "style: classic-bob @ .*"
+- takeScreenshot: flows-dev/05-style-overlay-classic-bob-teal
+# Nudge controls stay wired: the stat survives a scale-up and a reset.
+- tapOn:
+    id: "nudge-scale-up"
+- assertVisible: "style: classic-bob @ .*"
+- tapOn:
+    id: "nudge-reset"
+- assertVisible: "style: classic-bob @ .*"

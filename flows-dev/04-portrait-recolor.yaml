@@ -58,22 +58,33 @@ appId: com.maneframe.app
 - assertVisible:
     text: "hair px: ([2-9]|1[0-5])\\.\\d%"
 # Visible proof: switch to a bold vivid color at full intensity and
-# screenshot. The swatch row auto-scrolls to the selected (natural) color,
-# so swipe it left until it saturates at its end - the catalog's last
-# colors (incl. Teal) are then deterministically on-screen regardless of
-# how far each individual swipe scrolls. Percentages keep this
-# resolution-independent; the row sits ~69% down the screen once a photo
-# is loaded (reference device: Pixel 5). Swiping past the end is a no-op.
+# screenshot. Iteration 5 added the Style chip section above the color
+# swatches, pushing the swatch row below the fold at top scroll - so
+# first scroll the page to the bottom (two full-screen swipes; swiping
+# past the end is a no-op), where the swatch row sits ~73% down the
+# screen (reference device: Pixel 5). The swatch row auto-scrolls to the
+# selected (natural) color, so swipe it left until it saturates at its
+# end - the catalog's last colors (incl. Teal) are then deterministically
+# on-screen regardless of how far each individual swipe scrolls.
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
 - repeat:
     times: 12
     commands:
       - swipe:
-          start: 85%, 69%
-          end: 10%, 69%
+          start: 85%, 73%
+          end: 10%, 73%
 - tapOn: "Teal"
 - tapOn: "Bold 1.0"
 - extendedWaitUntil:
     notVisible: "Processing…"
     timeout: 30000
 - assertVisible: "Color — Teal"
+# Scroll back to the top so the screenshot shows the recolored canvas.
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
 - takeScreenshot: flows-dev/04-portrait-recolor-teal-bold

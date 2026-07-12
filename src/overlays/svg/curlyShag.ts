@@ -2,15 +2,15 @@ import { svgWrapper } from './shared';
 
 /**
  * Curly Shag — medium length, layered, curly/wavy texture. Built from a
- * base shag silhouette (same evenodd cap-minus-face-oval technique as the
- * other five) plus a ring of overlapping "curl puff" circles around its
- * perimeter for a bumpy, voluminous curl outline. Every curl circle is
- * placed outside the shared face-oval rectangle (x in [148,364], y in
- * [109,352]) so none of them need their own cutout.
+ * base shag silhouette (single closed path: outer silhouette + inner
+ * hairline boundary, same construction as the other five — see
+ * pixieCrop.ts for why there is deliberately no face-oval cutout subpath)
+ * plus a ring of overlapping "curl puff" circles around its perimeter for
+ * a bumpy, voluminous curl outline. Every curl circle sits outside the
+ * face region so none of them cover the wearer's face.
  */
 export const CURLY_SHAG_SVG = svgWrapper(`
   <path
-    fill-rule="evenodd"
     fill="url(#hairGrad)"
     d="
       M165,190
@@ -19,19 +19,13 @@ export const CURLY_SHAG_SVG = svgWrapper(`
       C352,240 350,300 344,360
       C338,410 328,450 312,478
       C302,494 288,480 290,455
-      C293,420 296,380 296,340
-      C296,280 288,220 256,190
-      C224,220 216,280 216,340
-      C216,380 219,420 222,455
+      C295,420 300,380 302,340
+      C304,275 292,212 256,195
+      C220,212 208,275 210,340
+      C212,380 217,420 222,455
       C224,480 210,494 200,478
       C184,450 174,410 168,360
       C162,300 160,240 165,190
-      Z
-      M368,230
-      C368,299.04 317.86,355 256,355
-      C194.14,355 144,299.04 144,230
-      C144,160.96 194.14,105 256,105
-      C317.86,105 368,160.96 368,230
       Z
     "
   />

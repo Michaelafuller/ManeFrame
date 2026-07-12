@@ -2,15 +2,21 @@ import { svgWrapper } from './shared';
 
 /**
  * Pixie Crop — short, cropped close to the scalp, with a side-swept fringe
- * dipping diagonally across the forehead. Drawn as a single compound path
- * (`fill-rule="evenodd"`): the outer cap silhouette plus an inner
- * face-oval cutout (same ellipse geometry on all six styles) so the
- * wearer's actual face shows through once this overlay is placed via the
- * shared `OVERLAY_HEAD_BOX` anchor.
+ * dipping diagonally across the forehead. A single closed path whose OUTER
+ * boundary is the cap silhouette and whose INNER boundary traces the
+ * hairline/fringe — the enclosed region is exactly the hair, so the
+ * wearer's actual face shows through below the fringe once this overlay
+ * is placed via the shared `OVERLAY_HEAD_BOX` anchor.
+ *
+ * NOTE (Iteration 5 on-device finding): do NOT add a face-oval "cutout"
+ * subpath. With `fill-rule="evenodd"` a second subpath only subtracts
+ * where it overlaps the first — everywhere else it ADDS fill, which
+ * painted a solid blob over the wearer's face in the first evidence
+ * capture (docs/evidence). Each style's own inner hairline boundary is
+ * the correct construction.
  */
 export const PIXIE_CROP_SVG = svgWrapper(`
   <path
-    fill-rule="evenodd"
     fill="url(#hairGrad)"
     d="
       M170,150
@@ -23,12 +29,6 @@ export const PIXIE_CROP_SVG = svgWrapper(`
       C220,158 205,190 196,225
       C190,242 184,248 176,240
       C166,225 166,180 170,150
-      Z
-      M368,230
-      C368,299.04 317.86,355 256,355
-      C194.14,355 144,299.04 144,230
-      C144,160.96 194.14,105 256,105
-      C317.86,105 368,160.96 368,230
       Z
     "
   />

@@ -1,0 +1,68 @@
+appId: com.maneframe.app
+# "No face detected" hint acceptance (Iteration 5 / M6). Loads the bundled
+# no-face test image (a generated app-icon asset - not a photo of anyone,
+# and no camera/library involvement, per the standing privacy rule),
+# asserts the release-visible "No hair detected" hint with no style
+# selected, then selects a style and asserts the neutral "No face
+# detected - try a front-facing photo." hint renders instead of an error,
+# with no overlay placement stat (the placement engine returned null).
+#
+# *** DEV-MODE ONLY - NOT part of `npm run e2e`. *** Same run protocol as
+# the other flows-dev/ flows (Metro + deep link, no `launchApp` step).
+#
+# State note: flows-dev/ runs alphabetically with persistent app state
+# (no launchApp on a dev client), so flow 05 leaves a style selected -
+# this flow explicitly taps "None" before asserting the no-hair hint,
+# which only renders when no style is active.
+---
+- extendedWaitUntil:
+    visible: "Search"
+    timeout: 90000
+- tapOn: "Preview"
+- scrollUntilVisible:
+    element:
+      text: "\\[dev\\] Load bundled no-face test image"
+    direction: DOWN
+- tapOn: "[dev] Load bundled no-face test image"
+# Segmentation still runs (and the model may still be cold-loading).
+# Loading a photo does not reset the scroll position - swipe back to the
+# top before asserting the stat lines under the canvas.
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- extendedWaitUntil:
+    visible: "hair px: .*"
+    timeout: 90000
+# The no-hair hint only renders with NO style selected (it invites the
+# user to pick one) - deselect whatever an earlier flow left active.
+- scrollUntilVisible:
+    element:
+      text: "None"
+    direction: DOWN
+- tapOn: "None"
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+# The no-face image has no hair either, so with no style selected the
+# release-visible no-hair hint should be up (backlog item 4).
+- assertVisible: "No hair detected in this photo — pick a style to try one on."
+# Select a style; the placement engine finds no face-skin region above
+# threshold, so the no-face hint must appear - phrased as guidance, not
+# an error (the red error text is a different element).
+- scrollUntilVisible:
+    element:
+      text: "Classic Bob"
+    direction: DOWN
+- tapOn: "Classic Bob"
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- extendedWaitUntil:
+    visible: "No face detected — try a front-facing photo."
+    timeout: 30000
+# No placement stat may render when placement returned null.
+- assertNotVisible: "style: classic-bob @ .*"
+- takeScreenshot: flows-dev/06-no-face-hint

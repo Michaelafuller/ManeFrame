@@ -22,10 +22,13 @@ export const OVERLAY_HEIGHT = 640;
 /**
  * Anchor metadata (normalized 0..1, in overlay coordinates): where the
  * wearer's face-skin region should sit under this art. Identical across
- * all six styles because they're all drawn against the same reference face
+ * all six styles because they're all drawn against the same reference head
  * oval on the same canvas (this is what makes the placement engine's
  * transform math work uniformly regardless of how far individual styles'
- * hair extends below/around that oval).
+ * hair extends below/around that oval). Semantics: this box is the HEAD
+ * region (crown to chin) — the placement engine maps it onto the head box
+ * computed from the face-skin mask (`computeHeadBox`: detected face box +
+ * scalp extension + side padding), not onto the raw face box.
  */
 export const OVERLAY_HEAD_BOX = { x: 0.29, y: 0.17, w: 0.42, h: 0.38 } as const;
 

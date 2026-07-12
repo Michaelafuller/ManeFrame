@@ -2,14 +2,14 @@ import { svgWrapper } from './shared';
 
 /**
  * Buzz Cut — extremely short, a thin dome hugging the very top of the
- * scalp. Most of the drawn dome overlaps the shared face-oval cutout
- * (evenodd), leaving only a narrow rim tracing the hairline — exactly the
- * silhouette a genuine buzz cut has (barely proud of the head, no
- * meaningful side/back volume).
+ * scalp: a narrow band between the outer dome silhouette and an inner
+ * boundary tracing the hairline, exactly the silhouette a genuine buzz
+ * cut has (barely proud of the head, no side/back volume). Single closed
+ * path — see pixieCrop.ts for why there is deliberately no face-oval
+ * cutout subpath.
  */
 export const BUZZ_CUT_SVG = svgWrapper(`
   <path
-    fill-rule="evenodd"
     fill="url(#hairGrad)"
     d="
       M178,155
@@ -19,12 +19,6 @@ export const BUZZ_CUT_SVG = svgWrapper(`
       C310,178 292,168 256,168
       C220,168 202,178 190,200
       C180,192 176,175 178,155
-      Z
-      M368,230
-      C368,299.04 317.86,355 256,355
-      C194.14,355 144,299.04 144,230
-      C144,160.96 194.14,105 256,105
-      C317.86,105 368,160.96 368,230
       Z
     "
   />

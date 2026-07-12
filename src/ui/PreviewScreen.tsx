@@ -832,11 +832,11 @@ export default function PreviewScreen({
         {error && <Text style={styles.errorText}>{error}</Text>}
 
         <Text style={styles.sectionLabel}>Style</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.styleRow}
-        >
+        {/* A wrapping chip group, NOT a horizontal ScrollView: with 7 chips
+            the later ones would sit off-screen - unreachable both for
+            deterministic Maestro automation and awkward for one-handed
+            use. Wrapped rows keep every style visible at once. */}
+        <View style={styles.styleRow}>
           <Pressable
             style={[styles.styleChip, activeStyleId === null && styles.styleChipActive]}
             onPress={() => setActiveStyleId(null)}
@@ -870,7 +870,7 @@ export default function PreviewScreen({
               </Text>
             </Pressable>
           ))}
-        </ScrollView>
+        </View>
 
         <Text style={styles.sectionLabel}>Color — {activeColor.displayName}</Text>
         <ScrollView
@@ -1096,7 +1096,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   styleRow: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 10,
   },
   styleChip: {
     borderWidth: 1,
@@ -1105,6 +1107,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     marginRight: 8,
+    marginBottom: 6,
   },
   styleChipActive: {
     backgroundColor: '#222',
