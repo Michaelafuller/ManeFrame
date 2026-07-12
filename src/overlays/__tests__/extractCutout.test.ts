@@ -302,16 +302,30 @@ describe('checkFaceBoxPlausibility', () => {
     expect(result.reasons.some((r) => r.includes('width fraction'))).toBe(true);
   });
 
-  it('rejects a width fraction above 60% of the image (extreme close-up crop) - the pixie-crop finding', () => {
+  it('accepts a width fraction of 0.621 (extreme close-up crop) after the round-2 recalibration - the pixie-crop finding', () => {
     // Reproduces the round-2 on-device finding for the shipped pixie-crop
-    // donor: face-box width fraction 0.621, just over the 0.60 cap.
+    // donor: face-box width fraction 0.621. The cap was raised 0.60 -> 0.70
+    // (planner recalibration, 2026-07-12) specifically because this
+    // visually-verified, already-shipped donor false-failed the old 0.60
+    // cap - it must now pass plausibility outright.
     const result = checkFaceBoxPlausibility(
       { x: 0.3086, y: 0.2148, w: 0.6211, h: 0.7070 },
       1024,
       1024
     );
+    expect(result.plausible).toBe(true);
+    expect(result.reasons).toEqual([]);
+  });
+
+  it('rejects a width fraction above 70% of the image (extreme close-up crop, beyond the recalibrated cap)', () => {
+    const result = checkFaceBoxPlausibility({ x: 0.15, y: 0.2, w: 0.71, h: 0.7 }, 1000, 1000);
     expect(result.plausible).toBe(false);
     expect(result.reasons.some((r) => r.includes('width fraction'))).toBe(true);
+  });
+
+  it('accepts a width fraction inside the 0.60-0.70 close-crop band on its own (machine check alone; the mandatory visual check is the backstop here)', () => {
+    const result = checkFaceBoxPlausibility({ x: 0.15, y: 0.2, w: 0.65, h: 0.65 }, 1000, 1000);
+    expect(result.plausible).toBe(true);
   });
 
   it('rejects a face box whose top edge sits in the bottom third of the image', () => {

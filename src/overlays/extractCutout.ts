@@ -118,7 +118,17 @@ const INNER_Y1_FRACTION = 0.85;
 const FACE_BOX_ASPECT_MIN = 0.55;
 const FACE_BOX_ASPECT_MAX = 1.15;
 const FACE_BOX_WIDTH_FRACTION_MIN = 0.15;
-const FACE_BOX_WIDTH_FRACTION_MAX = 0.6;
+/**
+ * Iteration 5R round 2 planner recalibration (2026-07-12): raised from 0.60
+ * to 0.70 after the flat 0.60 cap false-failed the shipped, visually-verified
+ * pixie-crop donor at a width fraction of 0.621 - legitimate close-crop
+ * portraiture can exceed 0.60, and the cap is a mis-detection proxy, not a
+ * composition rule. The 0.60-0.70 band is the "close-crop band": machine
+ * plausibility alone is not trusted there, so the mandatory anchor-box-
+ * rendered-on-cutout visual check (docs/HANDOFF.md ROUND 2 ADDENDUM) is the
+ * effective backstop for any donor landing in that range.
+ */
+const FACE_BOX_WIDTH_FRACTION_MAX = 0.7;
 /** "top edge in the bottom third of the image" - y > 2/3. */
 const FACE_BOX_TOP_THIRD_LIMIT = 2 / 3;
 

@@ -1,14 +1,30 @@
 /**
- * Machine gate for face occlusion (Iteration 5R / M6 remediation): decodes
- * every SHIPPED overlay asset PNG straight off disk (via `pngjs`, not the
- * app's own decode path - a deliberately independent check) and asserts
- * that its alpha coverage inside its own recorded face box stays under
- * 20%. This is the "hair must not sit on the face" invariant the planner
- * ordered after Iteration 5's SVG art shipped with overlays that visually
- * occluded the face despite every other machine check passing (see
- * docs/PROGRESS.md's Iteration 5 entry: "flows passed" != "looks right" -
- * but THIS property, unlike general art quality, is machine-checkable, so
- * it gets a real regression gate).
+ * Machine gate for face occlusion (Iteration 5R / M6 remediation, revised
+ * Iteration 5R round 2): decodes every SHIPPED overlay asset PNG straight
+ * off disk (via `pngjs`, not the app's own decode path - a deliberately
+ * independent check) and asserts the REVISED gate from `extractCutout.ts`:
+ * inner-face coverage (eyes/nose/mouth zone) stays under
+ * `INNER_FACE_MAX_COVERAGE`, and whole-face coverage stays under the
+ * `WHOLE_FACE_MAX_COVERAGE` backstop. This is the "hair must not sit on the
+ * face" invariant the planner ordered after Iteration 5's SVG art shipped
+ * with overlays that visually occluded the face despite every other machine
+ * check passing (see docs/PROGRESS.md's Iteration 5 entry: "flows passed"
+ * != "looks right" - but THIS property, unlike general art quality, is
+ * machine-checkable, so it gets a real regression gate).
+ *
+ * Coverage math is shared with the extraction harness via
+ * `computeInnerFaceBox`/`computeAlphaCoverage` (`../extractCutout`) - same
+ * functions, same thresholds, independently re-derivable from either the
+ * freshly-computed cutout or (here) the shipped PNG on disk. NOT wired here:
+ * the face-box PLAUSIBILITY check (aspect/width-fraction/vertical-position),
+ * because that check is scale-dependent on the donor's TRUE pre-crop pixel
+ * dimensions, which aren't recorded in the shipped registry (only the
+ * cutout-relative face box is - see `OverlayAsset`). Plausibility is
+ * verified once, at extraction time, by the gitignored `donors/anchors.json`
+ * harness output plus the mandatory anchor-box-rendered-on-cutout visual
+ * check (docs/HANDOFF.md ROUND 2 ADDENDUM) - not re-derivable from the
+ * shipped asset alone, so it stays a one-time human-verified gate rather
+ * than a CI regression gate.
  *
  * Reads the actual files under `assets/hairstyles/<id>/front.png`, not a
  * fixture copy - a future iteration that replaces a shipped asset without
@@ -20,13 +36,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PNG } from 'pngjs';
 
+import {
+  computeAlphaCoverage,
+  computeInnerFaceBox,
+  INNER_FACE_MAX_COVERAGE,
+  WHOLE_FACE_MAX_COVERAGE,
+} from '../extractCutout';
 import { OVERLAY_REGISTRY } from '../registry';
-
-/** Matches `computeCutout`'s own early-read threshold (alpha > 0.1, i.e. > 25/255). */
-const ALPHA_COVERED_THRESHOLD = 25;
-
-/** The face-occlusion gate itself: docs/HANDOFF.md Iteration 5R, item 4. */
-const MAX_FACE_COVERAGE = 0.2;
 
 const ASSETS_ROOT = path.join(__dirname, '..', '..', '..', 'assets', 'hairstyles');
 
@@ -52,28 +68,17 @@ describe('shipped overlay asset face-occlusion gate (pngjs, reads real files)', 
         expect(png.height).toBe(asset.height);
       });
 
-      it(`alpha coverage inside its own face box stays under ${MAX_FACE_COVERAGE}`, () => {
+      it(`inner-face (eyes/nose/mouth) alpha coverage stays under ${INNER_FACE_MAX_COVERAGE}`, () => {
         const png = PNG.sync.read(fs.readFileSync(assetPath));
-        const { x, y, w, h } = asset.headBox;
+        const innerBox = computeInnerFaceBox(asset.headBox);
+        const coverage = computeAlphaCoverage(png.data, png.width, png.height, innerBox);
+        expect(coverage).toBeLessThan(INNER_FACE_MAX_COVERAGE);
+      });
 
-        const x0 = Math.max(0, Math.floor(x * png.width));
-        const y0 = Math.max(0, Math.floor(y * png.height));
-        const x1 = Math.min(png.width - 1, Math.ceil((x + w) * png.width) - 1);
-        const y1 = Math.min(png.height - 1, Math.ceil((y + h) * png.height) - 1);
-
-        let area = 0;
-        let covered = 0;
-        for (let yy = y0; yy <= y1; yy++) {
-          for (let xx = x0; xx <= x1; xx++) {
-            area++;
-            const alpha = png.data[(yy * png.width + xx) * 4 + 3];
-            if (alpha > ALPHA_COVERED_THRESHOLD) covered++;
-          }
-        }
-
-        expect(area).toBeGreaterThan(0);
-        const coverage = covered / area;
-        expect(coverage).toBeLessThan(MAX_FACE_COVERAGE);
+      it(`whole-face alpha coverage stays under the ${WHOLE_FACE_MAX_COVERAGE} backstop`, () => {
+        const png = PNG.sync.read(fs.readFileSync(assetPath));
+        const coverage = computeAlphaCoverage(png.data, png.width, png.height, asset.headBox);
+        expect(coverage).toBeLessThan(WHOLE_FACE_MAX_COVERAGE);
       });
     });
   }

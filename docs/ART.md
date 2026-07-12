@@ -66,6 +66,23 @@ lowered; the gap is reported here instead.
   path) and re-computes the same coverage fraction against the shipped
   file on disk — a future asset swap that skips re-running the extraction
   pipeline's occlusion check fails this test automatically.
+- **Round-2 gate recalibration (2026-07-12): re-confirmed PASS under the
+  revised gate.** The numbers above predate the round-2 gate revision (the
+  original flat `hairCoverageInFaceBox < 0.20` rule). Under the revised
+  gate (`docs/HANDOFF.md` ROUND 2 ADDENDUM — inner-face `< 0.15`,
+  whole-face backstop `< 0.5`, face-box plausibility with the width-fraction
+  cap raised 0.60 → 0.70): `innerFaceCoverage = 0.0722` (PASS),
+  `hairCoverageInFaceBox = 0.1647` (PASS, well under the 0.5 backstop),
+  donor face-box width fraction `0.621` — inside the recalibrated
+  `[0.15, 0.70]` bound (PASS; this is the exact finding that motivated the
+  cap being raised from 0.60), aspect `0.879` and top-edge `y=0.215` both
+  comfortably inside bounds. **`gatePass: true`** under the revised gate,
+  in addition to the pre-existing visual anchor-box verification above.
+  `shippedAssetOcclusion.test.ts` was updated in Iteration 5R round 2 to
+  assert the revised inner-face/whole-face thresholds directly against
+  this shipped asset (plausibility isn't re-derivable from the shipped PNG
+  alone — see that test file's header comment — so it stays a one-time
+  extraction-time + visual check, not a CI regression gate).
 
 ---
 
