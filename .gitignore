@@ -46,3 +46,7 @@ coverage/
 # downloaded EAS build artifacts (large binaries, not source)
 *.apk
 *.aab
+
+# Iteration 5R: donor portraits for hair-cutout extraction (originals never ship;
+# only the extracted cutouts under assets/hairstyles/ are committed - see docs/ART.md)
+/donors/

@@ -223,6 +223,80 @@ export function computeOverlayTransform(
 }
 
 /**
+ * Iteration 5R placement contract (donor-hair cutout overlays): UNIFORM
+ * scale only. `scale = target face-box width / donor face-box width`, and
+ * the two face boxes' top-centers are aligned. No non-uniform stretch -
+ * real-hair cutouts distort visibly under independent X/Y scaling (the
+ * rejected Iteration 5 approach); a uniform scale preserves the donor
+ * hair's aspect exactly, and the nudge controls remain for manual
+ * correction.
+ *
+ * `overlayFaceBox` is the donor's detected face box recorded in
+ * cutout-relative normalized coordinates at extraction time (the catalog's
+ * `assets.headBox` field for raster cutout assets - see docs/ART.md);
+ * `targetFaceBox` is the wearer's detected face box in photo-normalized
+ * coordinates.
+ */
+export function computeUniformOverlayTransform(
+  overlayFaceBox: NormalizedBox,
+  targetFaceBox: NormalizedBox,
+  photoWidth: number,
+  photoHeight: number,
+  overlayWidth: number,
+  overlayHeight: number
+): AffineTransform {
+  const targetPx = {
+    x: targetFaceBox.x * photoWidth,
+    y: targetFaceBox.y * photoHeight,
+    w: targetFaceBox.w * photoWidth,
+    h: targetFaceBox.h * photoHeight,
+  };
+  const overlayFacePx = {
+    x: overlayFaceBox.x * overlayWidth,
+    y: overlayFaceBox.y * overlayHeight,
+    w: overlayFaceBox.w * overlayWidth,
+    h: overlayFaceBox.h * overlayHeight,
+  };
+
+  const scale = overlayFacePx.w > 0 ? targetPx.w / overlayFacePx.w : 1;
+
+  // Align the two face boxes' top-centers.
+  const overlayTopCenterX = overlayFacePx.x + overlayFacePx.w / 2;
+  const targetTopCenterX = targetPx.x + targetPx.w / 2;
+  const translateX = targetTopCenterX - overlayTopCenterX * scale;
+  const translateY = targetPx.y - overlayFacePx.y * scale;
+
+  return { scaleX: scale, scaleY: scale, translateX, translateY };
+}
+
+/**
+ * End-to-end uniform placement (Iteration 5R): face mask -> face box ->
+ * uniform overlay transform. Returns `null` when no face is detected
+ * (mask has no pixel above `threshold`), which callers should surface as
+ * "No face detected - try a front-facing photo" rather than an error.
+ */
+export function computeUniformPlacementFromFaceMask(
+  faceMask: HairMask,
+  overlayFaceBox: NormalizedBox,
+  overlayWidth: number,
+  overlayHeight: number,
+  photoWidth: number,
+  photoHeight: number,
+  threshold: number = DEFAULT_THRESHOLD
+): AffineTransform | null {
+  const targetFaceBox = computeMaskBoundingBox(faceMask, threshold);
+  if (!targetFaceBox) return null;
+  return computeUniformOverlayTransform(
+    overlayFaceBox,
+    targetFaceBox,
+    photoWidth,
+    photoHeight,
+    overlayWidth,
+    overlayHeight
+  );
+}
+
+/**
  * End-to-end convenience: face mask -> face box -> head box -> overlay
  * transform. Returns `null` when no face is detected (mask has no pixel
  * above `threshold`), which callers should surface as "No face detected -
