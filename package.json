@@ -39,6 +39,7 @@
     "typecheck": "tsc --noEmit",
     "postinstall": "patch-package",
     "e2e": "maestro test flows/ --format junit --output flows/results.xml",
+    "e2e:dev": "maestro test flows-dev/",
     "e2e:flow": "maestro test"
   },
   "private": true,

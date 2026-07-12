@@ -1,0 +1,5 @@
+--------- beginning of main
+07-11 17:59:59.748  8594  8662 I ReactNativeJS: [tflite][diag] input tensor stats (first 1000/196608): min=0.0000 max=0.5569 mean=0.1202 byteLength=786432 expectedBytes=786432
+07-11 18:00:00.193  8594  8662 I ReactNativeJS: [tflite][diag] output per-channel means (6 channels): ch0=2.0957 ch1=-0.4555 ch2=-0.6013 ch3=-0.8827 ch4=-0.9261 ch5=-1.0095
+07-11 18:00:00.193  8594  8662 I ReactNativeJS: [tflite][diag] per-pixel cross-channel sum on 5 sample pixels (≈1.0 everywhere => already softmaxed => H2 confirmed): -2.3492, -2.3474, -2.3655, -2.3261, -2.2587
+07-11 18:00:00.282  8594  8662 I ReactNativeJS: [tflite][diag] final mask stats: min=0.0073 max=0.9364 mean=0.1182 fraction>0.5=0.1104

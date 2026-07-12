@@ -1,0 +1,79 @@
+appId: com.maneframe.app
+# Real-hair recolor acceptance on the bundled CC0 test portrait
+# (Iteration 4R-6). This is the flow that closes the acceptance hole that
+# let the "tflite recolor looks like a no-op" report ship: every prior
+# automated probe photographed a desk (camera flow) or asserted UI text
+# only, so real segmentation never ran on an actual head of hair under
+# automation. The bundled portrait (assets/test/portrait.jpg, CC0 - see
+# docs/E2E.md) fixes that without ever touching the device photo library
+# (standing privacy rule, docs/PROGRESS.md).
+#
+# *** DEV-MODE ONLY - NOT part of `npm run e2e` (which targets a preview/
+# release build). *** The "[dev] Load bundled test portrait" button and
+# the "hair px: N%" stat are `__DEV__`-gated and do not exist in a release
+# bundle. Run this flow with `npm run e2e:dev` against a dev client
+# already deep-linked into a running Metro bundle:
+#
+#   npx expo start --dev-client            # (any port; 8082 if 8081 is taken)
+#   adb reverse tcp:<port> tcp:<port>
+#   adb shell am start -a android.intent.action.VIEW \
+#     -d "exp+maneframe://expo-development-client/?url=http%3A%2F%2Flocalhost%3A<port>"
+#   npm run e2e:dev
+#
+# There is deliberately NO `launchApp` step: on a dev-client install,
+# `launchApp`/`clearState` always reopens the Expo dev-launcher menu, never
+# the Metro bundle (see docs/E2E.md "Two modes"), so this flow assumes the
+# app is already showing the ManeFrame UI (either tab).
+#
+# The hair-fraction range assertion (2-15% of pixels > 0.5 confidence, per
+# docs/HANDOFF.md Iteration 4R-6) is the machine-checkable core: measured
+# 11.0% on the reference device (Pixel 5, dev client 32841af6, 2026-07-11,
+# logcat: mask min=0.0073 max=0.9364 mean=0.1182 fraction>0.5=0.1104).
+# The control capture with no hair in frame measured fraction>0.5=0.0000.
+---
+# Cold-starting the dev client fetches + parses the whole JS bundle from
+# Metro before any UI is interactive (~30-50s observed on the reference
+# device). Taps issued during that window land on a non-interactive
+# surface and are silently lost, so explicitly wait for the tab bar
+# before touching anything.
+- extendedWaitUntil:
+    visible: "Search"
+    timeout: 90000
+- tapOn: "Preview"
+- extendedWaitUntil:
+    visible: "[dev] Load bundled test portrait"
+    timeout: 15000
+- tapOn: "[dev] Load bundled test portrait"
+# First segmentation in a session also loads + prepares the 16.4 MB
+# tflite model; generous timeout (the segmentation itself is ~1s once
+# the model is ready). NOTE: Maestro text selectors are FULL-string regex
+# matches - a bare substring like "hair px" never matches "hair px: 11.0%".
+- extendedWaitUntil:
+    visible: "hair px: .*"
+    timeout: 90000
+# Badge must be real tflite (not mock, not failed-fallback).
+- assertVisible: "tflite segmentation"
+- assertNotVisible: "tflite failed.*"
+# Machine-checkable hair-size range: 2.0%-15.9% of mask pixels > 0.5.
+- assertVisible:
+    text: "hair px: ([2-9]|1[0-5])\\.\\d%"
+# Visible proof: switch to a bold vivid color at full intensity and
+# screenshot. The swatch row auto-scrolls to the selected (natural) color,
+# so swipe it left until it saturates at its end - the catalog's last
+# colors (incl. Teal) are then deterministically on-screen regardless of
+# how far each individual swipe scrolls. Percentages keep this
+# resolution-independent; the row sits ~69% down the screen once a photo
+# is loaded (reference device: Pixel 5). Swiping past the end is a no-op.
+- repeat:
+    times: 12
+    commands:
+      - swipe:
+          start: 85%, 69%
+          end: 10%, 69%
+- tapOn: "Teal"
+- tapOn: "Bold 1.0"
+- extendedWaitUntil:
+    notVisible: "Processing…"
+    timeout: 30000
+- assertVisible: "Color — Teal"
+- takeScreenshot: flows-dev/04-portrait-recolor-teal-bold

@@ -9,6 +9,56 @@ to `expo export`, only visible on-device).
 
 ---
 
+## Bundled test portrait (`assets/test/portrait.jpg`) — added Iteration 4R-6
+
+The standing privacy rule (camera-only automation, never the photo
+library) plus the camera facing a desk during automated runs meant no
+automated flow could ever exercise real hair segmentation on an actual
+head of hair — the acceptance hole that let the Iteration 4R-6
+"recolor is a visual no-op" defect ship undetected. Fixed structurally by
+bundling a real, licensed portrait as a build-time asset (never fetched
+over the network at runtime) plus a `__DEV__`-only diagnostic entry point
+(long-press "Pick a photo") that loads it through the exact same
+`processPickedAsset` path as a picked/captured photo.
+
+- **File:** `assets/test/portrait.jpg` (1024×683, 121,558 bytes; resized
+  from the original for repo size — the original is 5,184×3,456).
+- **Source:** Wikimedia Commons, `File:Brunette woman portrait
+  (Unsplash).jpg` —
+  https://commons.wikimedia.org/wiki/File:Brunette_woman_portrait_(Unsplash).jpg
+  (original: https://upload.wikimedia.org/wikipedia/commons/1/16/Brunette_woman_portrait_%28Unsplash%29.jpg)
+- **License:** CC0 1.0 Universal Public Domain Dedication (per the file's
+  Commons page: "dedicated the work to the public domain by waiving all
+  of their rights to the work worldwide under copyright law"). No
+  attribution required; no AI-generation dependency.
+- **Why this one:** full head-and-shoulders framing with long, clearly
+  visible hair against a high-contrast green background — unlike an
+  earlier CC0 candidate considered (`File:Face portrait (Unsplash).jpg`,
+  also CC0) which turned out to be an extreme macro face crop showing
+  only a sliver of buzzed hairline, not enough for a plausible
+  hair-fraction check.
+- **Dev diagnostic:** in `src/ui/PreviewScreen.tsx`, a dedicated
+  `__DEV__`-only button labeled "[dev] Load bundled test portrait"
+  (`testID="load-test-portrait-button"`, rendered next to "Pick a photo"
+  and again next to "Choose a different photo") loads this bundled asset
+  through `processPickedAsset`, exactly like a real picked photo. Never
+  present in a release build.
+  - **Why a dedicated button and not a long-press on "Pick a photo"** (the
+    HANDOFF's first-suggested option): tried first, and empirically it
+    doesn't work — React Native's `Pressable` fires `onPress` on release
+    *regardless* of whether `onLongPress` already fired, so long-pressing
+    a button that also has an `onPress` (opening the photo-source picker
+    modal) always ends with the modal open, never the diagnostic photo
+    loaded (confirmed via `adb logcat` showing zero JS console output and
+    a screenshot showing the "Choose from Library / Take a Photo" sheet
+    after the long-press). A separate button with only `onPress` sidesteps
+    the gesture-recognizer race entirely.
+  - This is what Maestro flow `04-portrait-recolor.yaml` drives, and what
+    a developer can use for manual on-device checks without ever touching
+    the photo library.
+
+---
+
 ## Prerequisites (one-time setup)
 
 ```bash
@@ -142,7 +192,8 @@ maestro test flows/ --format junit --output flows/results.xml
 | Photo picker entry point launches and returns cleanly (now pre-grants the CAMERA permission via `permissions:` - see "Permissions" above) | `flows/03-photo-tflite.yaml` | Yes (entry point only - see below) | **PASSED** |
 | Photo picking - actual selection (library picker / camera intent) | — | No, and this is now a deliberate, safety-motivated decision, not just a tooling gap. On this physical device the library-picker handler is the full Google Photos app, not a scoped system Photo Picker sheet - browsing to a specific pushed test image (by "most recent", by folder, or by search) repeatedly surfaced the phone owner's real personal photos (a government ID, family photos) while probing for a safe, deterministic selector. Automating past the picker's landing screen was abandoned for that reason during Iteration 4R-4, and `flows/03-photo-tflite.yaml` intentionally backs out (`back`) right after confirming the picker opened. Manual: pick a photo yourself, confirm it decodes and renders in the Canvas. |
 | tflite model load + prepare + inference in a release-mode bundle | — | No (see above), but verified via a **camera-capture probe** instead of the library picker - camera capture creates a brand-new photo rather than browsing existing ones, so it carries none of the library's privacy risk. **Iteration 4R-5 update: the badge now genuinely reads "tflite segmentation" end to end** (confirmed on preview build `d5998560`) - the classic `hair_segmenter.tflite`'s unresolved `MaxPoolingWithArgmax2D` custom-op blocker (found in 4R-4) is fixed by swapping to `selfie_multiclass_256x256.tflite`, a standard-ops-only Image Segmenter model (op list hand-verified custom-op-free - see docs/SUMMARY.md). Confirmed via `adb logcat`: `[tflite] Resolved model localUri (expo-asset): file:///data/user/0/com.maneframe.app/cache/ExponentAsset-....tflite` followed by `Initialized TensorFlow Lite runtime.` with no `unresolved-ops`/`MaxPoolingWithArgmax2D` error anywhere in the process log. See docs/SUMMARY.md for the full logcat excerpts, evidence screenshot, and mock-vs-tflite pixel-diff. |
-| Segmentation quality (mask actually follows hair, not face/background) | — | No — visual judgment call, not a text/accessibility assertion. Manual: check the recolored region tracks hair boundaries on a real photo. |
+| Real hair segmentation + recolor on an actual head of hair (bundled CC0 portrait, machine-checkable hair-fraction range) | `flows-dev/04-portrait-recolor.yaml` | Yes — **dev-mode only** (`npm run e2e:dev`, deliberately NOT part of `npm run e2e`: the "[dev] Load bundled test portrait" button and the "hair px: N%" stat are `__DEV__`-gated and don't exist in a release bundle, so this flow can never pass against a preview build). Asserts badge "tflite segmentation", no failure hint, hair fraction in the plausible 2–15% range (measured 11.0% on the reference device), then switches to Teal @ Bold 1.0 and screenshots. Run protocol (Metro + deep link first — no `launchApp`, see "Two modes") is in the flow's header comment. **Iteration 4R-6: PASSED** (genuine cold start, 57s). |
+| Segmentation quality (mask actually follows hair, not face/background) | — | Partially automated by flow 04 above (hair-fraction range assertion + Teal recolor screenshot); fine-grained edge quality remains a visual judgment call. Manual: check the recolored region tracks hair boundaries on a real photo. |
 | Recolor visual correctness (does the swatch color look right on hair) | — | No — same reasoning; color perception isn't assertable via accessibility tree. Manual: compare before/after (press-and-hold) for a few colors. |
 | tflite vs. mock segmenter toggle (long-press badge) | — | No — the badge's *label* is technically assertable, but exercising the toggle meaningfully requires a photo already picked (manual precondition). Manual: long-press the badge, confirm the label flips and the mask visibly changes. |
 | Live camera / video | — | Not built yet (M5, gated — see docs/HANDOFF.md) |
@@ -179,6 +230,8 @@ run this iteration") rather than omitting the section.
 | A color-only search query renders "No matching hairstyles." | Expected — `searchHairstyles` only returns unranked results for a fully empty query; a query with only color terms scores every style 0 and omits all of them. Add a length/fringe/texture/attribute word to the query. |
 | `adb shell screencap -p /sdcard/*.png` files clutter the system photo picker's "Recent" grid | Android indexes anything under `/sdcard` into MediaStore, including ad-hoc debug screenshots - they'll outrank a just-pushed test image in the picker's recency sort (and a synthetic PNG with no EXIF date can sort unpredictably, sometimes far from "recent"). Delete debug screenshots (`adb shell rm /sdcard/*.png`) once you're done with them rather than leaving them on the device. |
 | `adb shell input tap`/`swipe` silently does nothing when tapping "Choose from Library" / "Take a Photo" | Observed repeatedly in Iteration 4R-4 on the reference Pixel 5: raw `adb shell input` does not reliably trigger the system picker/camera Activity launch from inside the RN app (the app-level `Pressable` taps work fine; it's specifically the native picker/camera intent that doesn't fire). `maestro`'s own `tapOn` succeeded where raw `adb input` did not - prefer driving these steps through a Maestro flow, even ad hoc, over raw `adb shell input`. |
+| `assertVisible`/`tapOn` with a text selector fails even though the text is clearly on screen (and in `maestro hierarchy`) | Maestro text selectors are **full-string regex matches**, not substring searches: `"hair px"` never matches the node text `"hair px: 11.0%"`. Append `.*` (e.g. `"hair px: .*"`) or write the full pattern. Cost Iteration 4R-6 three failed flow runs before `maestro hierarchy` revealed the node was present all along. |
+| A tap lands during dev-client cold start and is silently lost | Cold-starting the dev client fetches + parses the whole Metro bundle before the UI is interactive (~30-50s observed). Maestro `tapOn` finds stale/non-interactive nodes and the tap is dropped without error. Start dev-mode flows with an `extendedWaitUntil` on some always-present UI text (see `flows-dev/04-portrait-recolor.yaml`) before the first tap. |
 
 ---
 
