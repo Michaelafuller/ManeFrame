@@ -221,4 +221,79 @@ describe('validator rejects bad data', () => {
       validateHairstyle({ ...validStyle, assets: {} })
     ).toThrow(CatalogValidationError);
   });
+
+  it('accepts a valid assets.headBox', () => {
+    expect(() =>
+      validateHairstyle({
+        ...validStyle,
+        assets: { ...validStyle.assets, headBox: { x: 0.2, y: 0.1, w: 0.5, h: 0.5 } },
+      })
+    ).not.toThrow();
+  });
+
+  it('rejects an assets.headBox with a non-numeric field', () => {
+    expect(() =>
+      validateHairstyle({
+        ...validStyle,
+        assets: { ...validStyle.assets, headBox: { x: 0.2, y: 0.1, w: '0.5', h: 0.5 } },
+      })
+    ).toThrow(CatalogValidationError);
+  });
+
+  it('rejects an assets.headBox with zero/negative width or height', () => {
+    expect(() =>
+      validateHairstyle({
+        ...validStyle,
+        assets: { ...validStyle.assets, headBox: { x: 0.2, y: 0.1, w: 0, h: 0.5 } },
+      })
+    ).toThrow(CatalogValidationError);
+  });
+
+  it('rejects an assets.headBox that extends past the 0..1 bounds', () => {
+    expect(() =>
+      validateHairstyle({
+        ...validStyle,
+        assets: { ...validStyle.assets, headBox: { x: 0.7, y: 0.1, w: 0.5, h: 0.5 } },
+      })
+    ).toThrow(CatalogValidationError);
+  });
+});
+
+describe('hairstyle overlay art integrity (Iteration 5 / M6)', () => {
+  // Deliberately re-requires the overlay registry directly (rather than
+  // importing it once at module scope) so this test file's failure
+  // messages are unambiguous about which side (catalog vs registry) is
+  // out of sync if they ever drift apart.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { OVERLAY_REGISTRY } = require('../../overlays/registry') as {
+    OVERLAY_REGISTRY: Record<string, unknown>;
+  };
+  const hairstyles = loadHairstyles();
+  const registryIds = Object.keys(OVERLAY_REGISTRY).sort();
+
+  it('every hairstyle with assets.headBox has a matching overlay registry entry, and vice versa', () => {
+    const catalogArtBearingIds = hairstyles
+      .filter((s) => s.assets.headBox !== undefined)
+      .map((s) => s.id)
+      .sort();
+    expect(catalogArtBearingIds).toEqual(registryIds);
+  });
+
+  it('has exactly 6 art-bearing MVP styles', () => {
+    const catalogArtBearingIds = hairstyles.filter((s) => s.assets.headBox !== undefined);
+    expect(catalogArtBearingIds).toHaveLength(6);
+  });
+
+  it('every art-bearing style has a valid, in-range headBox', () => {
+    for (const style of hairstyles) {
+      if (!style.assets.headBox) continue;
+      const { x, y, w, h } = style.assets.headBox;
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(w).toBeGreaterThan(0);
+      expect(h).toBeGreaterThan(0);
+      expect(x + w).toBeLessThanOrEqual(1);
+      expect(y + h).toBeLessThanOrEqual(1);
+    }
+  });
 });

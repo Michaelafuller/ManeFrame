@@ -25,6 +25,17 @@ export interface Hairstyle {
     front: string;
     leftThreeQuarter?: string;
     rightThreeQuarter?: string;
+    /**
+     * Try-on overlay anchor (Iteration 5 / M6), normalized (0..1) in the
+     * overlay art's own coordinate space: where the wearer's face-skin
+     * region should sit under this style's overlay art. Present only for
+     * "art-bearing" styles (currently the 6 MVP styles registered in
+     * `src/overlays/registry.ts`) — its presence here is what the UI uses
+     * to decide whether a style is try-on-eligible ("art coming soon"
+     * otherwise). See `src/catalog/__tests__/catalog.test.ts` for the
+     * integrity check cross-referencing this against the overlay registry.
+     */
+    headBox?: { x: number; y: number; w: number; h: number };
   };
   lengths: ('buzzed' | 'short' | 'chin' | 'shoulder' | 'medium' | 'long')[];
   fringe: (

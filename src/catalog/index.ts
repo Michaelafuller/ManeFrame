@@ -190,6 +190,38 @@ export function validateHairstyle(value: unknown): Hairstyle {
       `Hairstyle "${s.id}" must have a non-empty assets.front path.`
     );
   }
+  if (assets.headBox !== undefined) {
+    if (typeof assets.headBox !== 'object' || assets.headBox === null) {
+      throw new CatalogValidationError(
+        `Hairstyle "${s.id}" has an invalid assets.headBox (must be an object with x/y/w/h).`
+      );
+    }
+    const box = assets.headBox as Record<string, unknown>;
+    const { x, y, w, h } = box;
+    const allFinite = [x, y, w, h].every(isFiniteNumber);
+    if (!allFinite) {
+      throw new CatalogValidationError(
+        `Hairstyle "${s.id}" has a non-numeric assets.headBox field.`
+      );
+    }
+    const xNum = x as number;
+    const yNum = y as number;
+    const wNum = w as number;
+    const hNum = h as number;
+    if (
+      xNum < 0 ||
+      yNum < 0 ||
+      wNum <= 0 ||
+      hNum <= 0 ||
+      xNum + wNum > 1 + 1e-9 ||
+      yNum + hNum > 1 + 1e-9
+    ) {
+      throw new CatalogValidationError(
+        `Hairstyle "${s.id}" has an out-of-range assets.headBox ` +
+          '(x,y >= 0; w,h > 0; x+w <= 1; y+h <= 1).'
+      );
+    }
+  }
   if (
     !Array.isArray(s.lengths) ||
     s.lengths.length === 0 ||
