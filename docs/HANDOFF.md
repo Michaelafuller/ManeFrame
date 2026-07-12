@@ -1,6 +1,56 @@
 # HANDOFF — Iteration 5R (M6 remediation: real-hair donor overlays)
 
-**Author:** Fable 5 (planner) · **Status: READY (pending user approval of donor-photo downloads — the main session will relay it)**
+**Author:** Fable 5 (planner) · **Status: ROUND 2 — see addendum at top; original work order below still governs anything it doesn't supersede**
+
+## ROUND 2 ADDENDUM (planner, 2026-07-12, after first review)
+
+Round-1 outcomes, all planner-ratified: pixie-crop SHIPPED and signed
+off (provenance restored in ART.md — CC0 verified); buzz-cut donor
+pulled for personality-rights (named USMC officer) — pull ENDORSED, the
+style needs an ANONYMOUS donor; 4 styles gapped on the occlusion gate.
+User decision: one more bounded search round under a revised gate, then
+the single EAS build ships whatever has passed.
+
+**Gate revision (replaces the flat <20% whole-face rule):**
+- INNER-FACE gate (hard): alpha coverage over the central face region —
+  x ∈ [faceBox.x + 0.20·w, faceBox.x + 0.80·w], y ∈ [faceBox.y + 0.15·h,
+  faceBox.y + 0.85·h] (the eyes/nose/mouth zone) — must be **< 15%**.
+  Face-framing strands over cheek edges/temples are now LEGAL; that's
+  what real long styles do.
+- WHOLE-FACE backstop (hard): total alpha coverage over the full face
+  box **< 50%** (catches iteration-5-style disasters without punishing
+  framing).
+- FACE-BOX PLAUSIBILITY (hard, fixes the shoulder-lock false pass):
+  reject the extraction if the detected face box has aspect w/h outside
+  [0.55, 1.15], or width outside [15%, 60%] of image width, or its top
+  edge in the bottom third of the image. On rejection, the donor fails
+  loudly — never score occlusion against an implausible box.
+- The anchor-box-rendered-on-cutout visual check from round 1 stays
+  mandatory per shipped style.
+Apply the revised gate in BOTH the extraction harness and the
+shipped-asset pngjs unit test (update pixie-crop's expectations too — it
+must pass the new gate; if it doesn't, tell the planner, don't tune
+numbers to fit).
+
+**Round-2 scope (bounded):** one candidate sweep for classic-bob,
+classic-lob, long-beach-waves, curly-shag, plus an anonymous buzz-cut
+donor. Same licensing bar (CC0/PD, re-verified per file). Same approval
+protocol: full thumbnail list → main session → wait; promotions within
+the approved list are covered by that same approval. Re-testing the
+round-1 rejects that failed ONLY on face-framing strands (classic-lob
+"Model Features" excluded — its failure was face-box lock, retest it
+under the plausibility rule; long-beach-waves 0.337 and classic-lob
+0.419 are worth re-scoring under the inner-face gate before any new
+downloads) is FREE — do that first; it may shrink the download list.
+If a style still has no passing candidate after this round, it ships as
+a gap ("Art coming soon") — no third round this iteration.
+
+**Then:** evidence (iter5r2- prefix, every shipped style, one teal-bold,
+one natural) → STOP for planner review → after sign-off: cancel hung EAS
+build 80a980d7, submit the ONE preview build, request install approval,
+full e2e, SUMMARY.md.
+
+---
 
 ## What stands, what's rejected
 
