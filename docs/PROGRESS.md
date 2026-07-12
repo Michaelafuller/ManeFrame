@@ -286,3 +286,19 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
 - Gate: user retest on 1eac9823 (library pick vs fresh camera selfie —
   the comparison discriminates the EXIF hypothesis). Next iteration adds
   a release-visible "no hair detected" hint regardless of outcome.
+
+### User retest — PASSED (2026-07-11) — Phase 1 accepted by user; roadmap reordered
+
+- User verdict on build 1eac9823: colorization works well on BOTH library
+  picks and fresh camera selfies (EXIF hypothesis moot — the earlier
+  no-op reports were the model correctly finding no hair: the user is
+  bald). Library photos recolor noticeably better than camera captures
+  (highlights and light-source consistency); camera-capture UX "leaves a
+  little to be desired" — BACKLOG, user says it can wait.
+- User's remaining ask: hairstyles never apply. Correct — that's unbuilt
+  M6 (the search cards are display-only; catalog asset paths
+  `assets/hairstyles/**` were seeded in M1 but no files exist). Not a
+  regression.
+- **Roadmap reorder (user decision, 2026-07-11): M6 (hairstyle overlays)
+  moves BEFORE M5 (live camera).** Style try-on is the user's primary
+  use case. Iteration 5 = M6 MVP per HANDOFF.

@@ -1,59 +1,105 @@
-# HANDOFF — next iteration (pending user retest after 4R-6)
+# HANDOFF — Iteration 5 (Milestone M6: hairstyle overlay try-on, MVP)
 
-**Author:** Fable 5 (planner) · **Status: BLOCKED — awaiting user retest on preview build `1eac9823`**
+**Author:** Fable 5 (planner) · **Status: READY**
 
-## Gate
+## Why this is next
 
-Iteration 4R-6 is accepted. Its verdict: **the segmentation pipeline was
-already correct** — all three planner hypotheses (input normalization,
-double-softmax, ArrayBuffer input) were empirically refuted by on-device
-tensor stats, and on the bundled CC0 portrait the recolor works visibly and
-dramatically (hair px 11.04%, teal-bold evidence in docs/evidence/4r6-*).
-The user's "no visible change" therefore means the model found ~no hair in
-the user's specific photos (control run: no-hair frame → fraction>0.5 =
-0.0000, max confidence 0.1049).
+User accepted Phase 1 (color engine works on both capture paths). User
+decision 2026-07-11: M6 (style overlays) jumps ahead of M5 (live camera)
+— style try-on is their primary use case, and note the primary user is
+bald: the overlay must look right on a hairless head (which is actually
+the clean case — no existing hair to fight), and "no hair detected" must
+never read as an error.
 
-The user is retesting on preview build `1eac9823` (installed on their
-phone). The retest should distinguish:
+## Ground truth you must know
 
-- **Library pick of an existing portrait** — if this still yields no
-  change, prime suspect is EXIF orientation: library photos carry
-  orientation metadata; if expo-image-manipulator's resize does not bake
-  it in, Skia's decode (which ignores EXIF) hands the model a sideways
-  face, which plausibly segments to nothing. NEXT ITERATION MUST VERIFY
-  the orientation of what actually reaches the model (log decoded
-  width/height + a downscaled debug dump) before touching anything else.
-- **Fresh in-app camera selfie** — camera-path capture may behave
-  differently from library picks (different EXIF handling). If camera
-  works but library doesn't, EXIF is all but confirmed.
-- **Hair characteristics** — if both paths fail on the user's hair but the
-  bundled portrait works, the model may struggle with this specific hair
-  (very short, gray, low contrast against background, hat, lighting).
-  Then the fix is expectation-setting UX, not tensors.
+- The catalog (`src/catalog/data/hairstyles.json`) references
+  `assets/hairstyles/**.webp` — **none of these files exist**. Art is the
+  critical path.
+- Segmentation gives more than hair: `selfie_multiclass` channel 3 is
+  **face-skin** — use it for head detection/placement. Channel 1 = hair,
+  0 = background. The tensor pipeline (`tensorToHairMask`) currently
+  extracts only one channel; you will need a second mask (face) — extend
+  shape-driven, keep pure-TS + unit-tested.
+- JS-only constraint this iteration: NO new native dependencies (dev
+  client `32841af6` must stay valid; no gesture-handler — use button
+  nudge controls instead). Budget: exactly 1 EAS preview build at the
+  end (6 of 15 remain; leave ≥5).
 
-## Known UX gap to fix next iteration regardless of retest outcome
+## Work order
 
-Release builds give NO feedback when the mask is empty — "model found no
-hair" is indistinguishable from "broken" (exactly what burned the user in
-4R-5/4R-6). Add a release-visible hint when the mask's fraction>0.5 is
-below ~0.5%: e.g. "No hair detected in this photo — try a closer, well-lit
-shot." Costs one JS-only preview build (6 of 15 monthly builds remain).
+1. **Overlay art (self-authored, stylized).** Author a starter set of 6
+   styles as in-repo SVG (or Skia-drawable path data): pixie, buzz, bob,
+   shoulder-straight, long-wavy, curly — matching existing catalog ids.
+   Design constraints:
+   - Front-facing, neutral brown luminance ramp (mid-L with believable
+     shading structure) so the EXISTING color engine can recolor it:
+     treat overlay alpha as the confidence input to `recolorPixel`.
+   - Each asset carries anchor metadata: a normalized `headBox`
+     (`{x,y,w,h}` in overlay coordinates) marking where the wearer's
+     face-skin region should sit under it.
+   - Consistent art style across all 6 beats photo-real mismatch. We own
+     the copyright; no external art downloads, no AI-generation services.
+   - Catalog: point the 6 entries' `assets.front` at the real files;
+     styles without art yet must be filtered out of try-on (still
+     searchable, marked "art coming soon" on the card).
+2. **Placement engine (pure TS, unit-tested).** From the face-skin mask:
+   bounding box (threshold 0.5, largest connected region is fine —
+   simple flood fill), expand to a head box (scalp extends above the
+   face box ~40–60% of its height), then compute the affine transform
+   mapping the overlay's `headBox` onto it. Handle: no face detected
+   (return null → UI hint "No face detected — try a front-facing
+   photo"), off-center faces, and faces near frame edges (clamp).
+3. **Preview UI.** Style chip row (from catalog, art-bearing styles
+   only) + "None". Selected style renders as a Skia image layer over the
+   photo at the computed transform, recolored by the active color and
+   intensity through the same Lab pipeline. Nudge controls (dp buttons:
+   move/scale, plus reset) for manual correction — keep them minimal.
+   Search screen: tapping a style card carries the style (and color, as
+   today) into Preview.
+4. **"No hair detected" hint (backlog item, release-visible).** When no
+   style is selected AND the hair mask's fraction>0.5 is < 0.5%, show a
+   neutral hint: "No hair detected in this photo — pick a style to try
+   one on." (On this user's selfies that's the normal path, and it now
+   advertises the new feature instead of looking broken.)
+5. **Tests + E2E.** Unit: mask→face-box, transform math, catalog
+   integrity (art-bearing styles have anchors; files exist). Maestro:
+   extend the dev flows — bundled portrait + style applied + recolored
+   (assert an on-screen dev stat, e.g. overlay box "style: bob @
+   x,y,w,h", plus screenshot); camera desk-photo path must show the
+   no-face hint rather than an error. Full `flows/` set must stay green.
+6. **Evidence + build.** Screenshots: each of the 6 styles rendered on
+   the bundled portrait (one grid or six shots), one recolored variant,
+   and the no-face hint. Then ONE preview EAS build, install on the
+   user's phone (adb install of your own EAS artifact — ask the main
+   session for download approval first, listing file/source/size), run
+   full e2e against it. SUMMARY.md report as usual.
 
-## After the gate clears: M5 (live camera) outline unchanged
+## Known limitation to document (not solve)
 
-- react-native-vision-camera + worklets + Skia frame processor; needs a
-  new dev-client build (native deps).
-- Note: selfie_multiclass has NO previous-mask input channel (that was the
-  old 4-channel hair_segmenter, now removed) — the M5 temporal-smoothing
-  design must use output-side mask smoothing (EMA between frames), not the
-  4th-input-channel mechanism from the original Iteration 4 notes.
-- Recolor moves to an SkSL shader; CPU implementation stays as reference.
+Subjects with existing long hair will have real hair sticking out from
+under shorter overlay styles. Out of scope (inpainting territory). Note
+it in SUMMARY and the app hint text if a style is much smaller than the
+detected hair region. The primary user's bald case is unaffected.
+
+## Backlog (do NOT do this iteration)
+
+- Camera-capture UX polish (user: "leaves a little to be desired" —
+  lighting/highlight quality gap vs library photos; likely needs capture
+  resolution/exposure work).
+- Pinch/rotate gestures (needs gesture-handler → native dep → bundle
+  with M5's dev-client rebuild).
+- M5 live camera (next after this; see PROGRESS for the
+  temporal-smoothing note — selfie_multiclass has no mask-feedback input
+  channel, use output-side EMA).
 
 ## Standing constraints (unchanged)
 
 - Loop protocol per docs/PROGRESS.md; executor never edits HANDOFF /
-  PROGRESS / REMEDIATION / .claude/.
-- Automation never opens/browses the photo library (bundled-portrait
-  diagnostic + flows-dev/04 exist for hair-bearing coverage).
-- D1–D7; no hand-written native code without STOP-and-report; no push, no
-  analytics, no runtime network calls.
+  PROGRESS / REMEDIATION / .claude/. Report → docs/SUMMARY.md
+  ("Iteration 5" section).
+- Automation never opens/browses the photo library. Bundled portrait +
+  camera captures only.
+- D1–D7; no hand-written native code; no push/analytics/runtime network
+  calls; no Expo credentials beyond `eas whoami` / `eas build`.
+- Host disk ~2.9 GB free: no heavy installs; delete APKs after install.
