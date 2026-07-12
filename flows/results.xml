@@ -1,9 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <testsuites>
-  <testsuite name="Test Suite" device="0A131FDD4006VE" tests="4" failures="0" time="54.0">
-    <testcase id="00-launch" name="00-launch" classname="00-launch" file="flows\00-launch.yaml" time="6.0" status="SUCCESS"/>
-    <testcase id="01-search" name="01-search" classname="01-search" file="flows\01-search.yaml" time="28.0" status="SUCCESS"/>
-    <testcase id="02-preview-mock-badge" name="02-preview-mock-badge" classname="02-preview-mock-badge" file="flows\02-preview-mock-badge.yaml" time="7.0" status="SUCCESS"/>
-    <testcase id="03-photo-tflite" name="03-photo-tflite" classname="03-photo-tflite" file="flows\03-photo-tflite.yaml" time="13.0" status="SUCCESS"/>
+  <testsuite name="Test Suite" device="0A131FDD4006VE" tests="4" failures="0" time="57.0">
+    <testcase id="00-launch" name="00-launch" classname="00-launch" file="flows\00-launch.yaml" time="7.0" status="SUCCESS"/>
+    <testcase id="01-search" name="01-search" classname="01-search" file="flows\01-search.yaml" time="27.0" status="SUCCESS"/>
+    <testcase id="02-preview-mock-badge" name="02-preview-mock-badge" classname="02-preview-mock-badge" file="flows\02-preview-mock-badge.yaml" time="8.0" status="SUCCESS"/>
+    <testcase id="03-photo-tflite" name="03-photo-tflite" classname="03-photo-tflite" file="flows\03-photo-tflite.yaml" time="15.0" status="SUCCESS"/>
   </testsuite>
 </testsuites>
