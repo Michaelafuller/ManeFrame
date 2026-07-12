@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Asset } from 'expo-asset';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import {
@@ -32,6 +33,19 @@ import { ColorSwatch } from './ColorSwatch';
 
 /** Photos are downscaled to at most this many pixels on their long side. */
 const MAX_PHOTO_DIMENSION = 768;
+
+/**
+ * Dev/E2E-only diagnostic asset: a real, licensed portrait with clearly
+ * visible hair (see docs/E2E.md for source + CC0 license), bundled at
+ * build time - never fetched over the network. Automated flows (and the
+ * standing privacy rule against browsing the device photo library) have
+ * no other way to exercise real hair segmentation on an actual head of
+ * hair, since automated camera captures just photograph whatever the
+ * device happens to be pointed at (a desk, in practice). Long-pressing
+ * the photo-picker entry points loads this asset through the exact same
+ * `processPickedAsset` path as a real picked/captured photo.
+ */
+const bundledTestPortrait = require('../../assets/test/portrait.jpg');
 
 const INTENSITY_PRESETS: { label: string; value: number }[] = [
   { label: 'Subtle 0.5', value: 0.5 },
@@ -259,6 +273,39 @@ export default function PreviewScreen({
     }
   }
 
+  /**
+   * Dev/E2E-only: loads the bundled licensed test portrait
+   * (`assets/test/portrait.jpg`, see docs/E2E.md) through the exact same
+   * `processPickedAsset` path a real picked/captured photo takes. This is
+   * the only way automation (or a developer) can exercise real hair
+   * segmentation on an actual head of hair without ever browsing the
+   * device photo library - see the standing privacy rule in
+   * docs/PROGRESS.md. Never reachable in a release build's UI.
+   */
+  async function loadBundledTestPortrait() {
+    if (!__DEV__) return;
+    setPickerVisible(false);
+    try {
+      const asset = Asset.fromModule(bundledTestPortrait);
+      if (!asset.localUri) {
+        await asset.downloadAsync();
+      }
+      if (!asset.localUri || !asset.width || !asset.height) {
+        setError('Could not resolve the bundled test portrait asset.');
+        return;
+      }
+      await processPickedAsset({
+        uri: asset.localUri,
+        width: asset.width,
+        height: asset.height,
+      } as ImagePicker.ImagePickerAsset);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Could not load the bundled test portrait.'
+      );
+    }
+  }
+
   async function pickFromLibrary() {
     setPickerVisible(false);
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -300,6 +347,19 @@ export default function PreviewScreen({
       ? `${segmentationError.slice(0, 60)}…`
       : segmentationError;
 
+  // Dev/E2E-only machine-checkable stat (docs/HANDOFF.md Iteration 4R-6):
+  // fraction of mask pixels with confidence > 0.5, surfaced on-screen so
+  // Maestro can assert a plausible hair-sized range instead of relying on
+  // screenshot eyeballing. Never rendered in a release build.
+  const hairPixelFraction = useMemo(() => {
+    if (!mask) return null;
+    let above = 0;
+    for (let i = 0; i < mask.data.length; i++) {
+      if (mask.data[i] > 0.5) above++;
+    }
+    return above / mask.data.length;
+  }, [mask]);
+
   const selectedColorIndex = allColors.findIndex((c) => c.id === activeColor.id);
   // Estimated per-swatch width (see ColorSwatch's `swatchContainer` style:
   // 64dp width + 10dp marginRight) - close enough for an initial
@@ -315,8 +375,33 @@ export default function PreviewScreen({
           <Pressable
             style={styles.pickButton}
             onPress={() => setPickerVisible(true)}
+            testID="pick-photo-button"
           >
             <Text style={styles.pickButtonLabel}>Pick a photo</Text>
+          </Pressable>
+        )}
+
+        {/*
+          Dev/E2E-only diagnostic entry point (docs/HANDOFF.md Iteration
+          4R-6): a plain tap, not a long-press on the "Pick a photo"
+          button - React Native's Pressable fires `onPress` on release
+          regardless of whether `onLongPress` already fired, so sharing
+          the picker button's gesture recognizer with a second action
+          silently races (verified empirically: the long-press variant of
+          this button always ended up just opening the "Choose from
+          Library / Take a Photo" picker modal, never running the
+          diagnostic). A dedicated button sidesteps that entirely. Never
+          rendered in a release build.
+        */}
+        {__DEV__ && !photo && (
+          <Pressable
+            style={styles.devTestPortraitButton}
+            onPress={loadBundledTestPortrait}
+            testID="load-test-portrait-button"
+          >
+            <Text style={styles.devTestPortraitButtonLabel}>
+              [dev] Load bundled test portrait
+            </Text>
           </Pressable>
         )}
 
@@ -369,6 +454,11 @@ export default function PreviewScreen({
                 tflite failed: {truncatedSegmentationError}
               </Text>
             )}
+            {__DEV__ && hairPixelFraction !== null && (
+              <Text style={styles.hairStatText} testID="hair-pixel-stat">
+                {`hair px: ${(hairPixelFraction * 100).toFixed(1)}%`}
+              </Text>
+            )}
             <Text style={styles.hint}>
               Press and hold the photo to see the original. Long-press the
               badge in the corner to toggle mock ↔ tflite segmentation.
@@ -377,11 +467,26 @@ export default function PreviewScreen({
             <Pressable
               style={styles.secondaryButton}
               onPress={() => setPickerVisible(true)}
+              testID="choose-different-photo-button"
             >
               <Text style={styles.secondaryButtonLabel}>
                 Choose a different photo
               </Text>
             </Pressable>
+
+            {/* See the dev-only button above "Pick a photo" for why this
+                is a plain tap, not a long-press on an existing button. */}
+            {__DEV__ && (
+              <Pressable
+                style={styles.devTestPortraitButton}
+                onPress={loadBundledTestPortrait}
+                testID="load-test-portrait-button"
+              >
+                <Text style={styles.devTestPortraitButtonLabel}>
+                  [dev] Load bundled test portrait
+                </Text>
+              </Pressable>
+            )}
           </>
         )}
 
@@ -533,6 +638,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
+  hairStatText: {
+    fontSize: 11,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
   hint: {
     fontSize: 12,
     color: '#888',
@@ -550,6 +661,21 @@ const styles = StyleSheet.create({
   secondaryButtonLabel: {
     color: '#333',
     fontSize: 14,
+  },
+  devTestPortraitButton: {
+    borderWidth: 1,
+    borderColor: '#8a6d00',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: '#fff8e1',
+  },
+  devTestPortraitButtonLabel: {
+    color: '#8a6d00',
+    fontSize: 12,
+    fontWeight: '600',
   },
   errorText: {
     color: '#b00020',
