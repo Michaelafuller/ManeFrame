@@ -61,10 +61,32 @@ export interface CutoutResult {
   faceBox: NormalizedBox;
   /**
    * Fraction (0..1) of pixels inside `faceBox` whose cutout alpha exceeds
-   * 0.1 - an early read on the face-occlusion gate ("hair must not sit on
-   * the face": the shipped-asset unit test asserts < 0.2).
+   * 0.1 - the WHOLE-FACE BACKSTOP gate (Iteration 5R round 2: must stay
+   * < `WHOLE_FACE_MAX_COVERAGE`). Pixel-identical whether measured here
+   * (cutout-space) or against the original donor photo, since cropping
+   * never resamples pixels - only the plausibility checks below need true
+   * donor-image dimensions.
    */
   hairCoverageInFaceBox: number;
+  /**
+   * Fraction (0..1) of pixels inside the INNER face box (eyes/nose/mouth
+   * zone - see `computeInnerFaceBox`) whose cutout alpha exceeds 0.1 - the
+   * HARD gate (Iteration 5R round 2: must stay < `INNER_FACE_MAX_COVERAGE`).
+   * Face-framing strands over cheeks/temples (outside this inner zone) are
+   * legal; this is what "hair sitting on the eyes/nose/mouth" actually
+   * measures.
+   */
+  innerFaceCoverage: number;
+  /** The donor's detected face box BEFORE cropping, in the ORIGINAL donor photo's normalized (0..1) coordinates - needed for the plausibility check below, which is scale-dependent on the true image dimensions (cropping tightens the frame around the face, so the cutout-space faceBox's own normalized size is not representative of the original detection). */
+  donorFaceBox: NormalizedBox;
+  donorWidth: number;
+  donorHeight: number;
+  /** Face-box plausibility verdict (Iteration 5R round 2) - see `checkFaceBoxPlausibility`. */
+  faceBoxPlausibility: FaceBoxPlausibility;
+  /** Combined revised-gate verdict: plausibility AND inner-face AND whole-face all pass. */
+  gatePass: boolean;
+  /** Human-readable reasons the gate failed; empty when `gatePass` is true. */
+  gateReasons: string[];
 }
 
 const DEFAULT_OPTIONS: Required<CutoutOptions> = {
@@ -74,6 +96,124 @@ const DEFAULT_OPTIONS: Required<CutoutOptions> = {
   marginFraction: 0.02,
   faceThreshold: 0.5,
 };
+
+/**
+ * Occlusion-gate thresholds (Iteration 5R round 2 planner revision -
+ * replaces the flat <20% whole-face rule from round 1). See
+ * `docs/HANDOFF.md`'s "ROUND 2 ADDENDUM" for the rationale: face-framing
+ * strands over cheeks/temples are legal (that's what real long styles do),
+ * but hair must not sit over the eyes/nose/mouth, and a flat backstop still
+ * catches wholesale face occlusion.
+ */
+export const INNER_FACE_MAX_COVERAGE = 0.15;
+export const WHOLE_FACE_MAX_COVERAGE = 0.5;
+
+/** Inner face box fractional bounds (of the outer face box), per the round-2 addendum. */
+const INNER_X0_FRACTION = 0.2;
+const INNER_X1_FRACTION = 0.8;
+const INNER_Y0_FRACTION = 0.15;
+const INNER_Y1_FRACTION = 0.85;
+
+/** Face-box plausibility bounds, per the round-2 addendum. */
+const FACE_BOX_ASPECT_MIN = 0.55;
+const FACE_BOX_ASPECT_MAX = 1.15;
+const FACE_BOX_WIDTH_FRACTION_MIN = 0.15;
+const FACE_BOX_WIDTH_FRACTION_MAX = 0.6;
+/** "top edge in the bottom third of the image" - y > 2/3. */
+const FACE_BOX_TOP_THIRD_LIMIT = 2 / 3;
+
+/** Matches the shipped-asset test's threshold: alpha > 0.1 (25/255) counts as "covered". */
+const ALPHA_COVERED_THRESHOLD = 25;
+
+export interface FaceBoxPlausibility {
+  plausible: boolean;
+  reasons: string[];
+}
+
+/**
+ * The INNER face box: x in [faceBox.x + 0.20w, faceBox.x + 0.80w], y in
+ * [faceBox.y + 0.15h, faceBox.y + 0.85h] - the eyes/nose/mouth zone.
+ * Expressed in the same coordinate space as `faceBox` (cutout-normalized
+ * for a `CutoutResult.faceBox`, donor-normalized for a `donorFaceBox`).
+ */
+export function computeInnerFaceBox(faceBox: NormalizedBox): NormalizedBox {
+  return {
+    x: faceBox.x + INNER_X0_FRACTION * faceBox.w,
+    y: faceBox.y + INNER_Y0_FRACTION * faceBox.h,
+    w: (INNER_X1_FRACTION - INNER_X0_FRACTION) * faceBox.w,
+    h: (INNER_Y1_FRACTION - INNER_Y0_FRACTION) * faceBox.h,
+  };
+}
+
+/**
+ * Fraction (0..1) of pixels inside `box` (normalized, in `pixels`' own
+ * coordinate space) whose alpha channel exceeds `alphaThreshold`. Shared by
+ * the extraction harness (reading freshly-computed cutout pixels) and the
+ * shipped-asset pngjs test (reading a decoded PNG's pixel buffer) - same
+ * function, same threshold, independently re-derivable from either source.
+ */
+export function computeAlphaCoverage(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  box: NormalizedBox,
+  alphaThreshold: number = ALPHA_COVERED_THRESHOLD
+): number {
+  const x0 = Math.max(0, Math.floor(box.x * width));
+  const y0 = Math.max(0, Math.floor(box.y * height));
+  const x1 = Math.min(width - 1, Math.ceil((box.x + box.w) * width) - 1);
+  const y1 = Math.min(height - 1, Math.ceil((box.y + box.h) * height) - 1);
+
+  let area = 0;
+  let covered = 0;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      area++;
+      if (pixels[(y * width + x) * 4 + 3] > alphaThreshold) covered++;
+    }
+  }
+  return area > 0 ? covered / area : 0;
+}
+
+/**
+ * Face-box plausibility check (Iteration 5R round 2 - fixes the
+ * "shoulder-lock false pass": `classic-lob`'s "Model Features" candidate
+ * locked the face-skin mask onto a bare shoulder, which numerically scored
+ * 0% occlusion despite being anchored to the wrong region entirely). Must
+ * be evaluated against the TRUE original-image dimensions the face box was
+ * detected in - `imageWidth`/`imageHeight` should be the donor photo's own
+ * pixel dimensions, not a cropped cutout's (cropping tightens the frame
+ * around the face, which would make an otherwise-plausible box fail the
+ * width-fraction/vertical-position checks purely as an artifact of the
+ * crop, not the detection).
+ */
+export function checkFaceBoxPlausibility(
+  faceBox: NormalizedBox,
+  imageWidth: number,
+  imageHeight: number
+): FaceBoxPlausibility {
+  const reasons: string[] = [];
+  const widthPx = faceBox.w * imageWidth;
+  const heightPx = faceBox.h * imageHeight;
+  const aspect = heightPx > 0 ? widthPx / heightPx : 0;
+
+  if (aspect < FACE_BOX_ASPECT_MIN || aspect > FACE_BOX_ASPECT_MAX) {
+    reasons.push(
+      `face-box aspect w/h ${aspect.toFixed(3)} outside [${FACE_BOX_ASPECT_MIN}, ${FACE_BOX_ASPECT_MAX}]`
+    );
+  }
+  if (faceBox.w < FACE_BOX_WIDTH_FRACTION_MIN || faceBox.w > FACE_BOX_WIDTH_FRACTION_MAX) {
+    reasons.push(
+      `face-box width fraction ${faceBox.w.toFixed(3)} outside [${FACE_BOX_WIDTH_FRACTION_MIN}, ${FACE_BOX_WIDTH_FRACTION_MAX}]`
+    );
+  }
+  if (faceBox.y > FACE_BOX_TOP_THIRD_LIMIT) {
+    reasons.push(
+      `face-box top edge y=${faceBox.y.toFixed(3)} in the bottom third of the image (> ${FACE_BOX_TOP_THIRD_LIMIT.toFixed(3)})`
+    );
+  }
+  return { plausible: reasons.length === 0, reasons };
+}
 
 /**
  * Zeroes every mask cell that is not part of the largest 4-connected
@@ -284,18 +424,27 @@ export function computeCutout(
     h: (faceBoxDonor.h * donorHeight) / cutH,
   };
 
-  // Early face-occlusion read: fraction of face-box pixels with alpha > 0.1.
-  let faceArea = 0;
-  let faceCovered = 0;
-  const fx0 = Math.max(0, Math.floor(faceBox.x * cutW));
-  const fy0 = Math.max(0, Math.floor(faceBox.y * cutH));
-  const fx1 = Math.min(cutW - 1, Math.ceil((faceBox.x + faceBox.w) * cutW) - 1);
-  const fy1 = Math.min(cutH - 1, Math.ceil((faceBox.y + faceBox.h) * cutH) - 1);
-  for (let y = fy0; y <= fy1; y++) {
-    for (let x = fx0; x <= fx1; x++) {
-      faceArea++;
-      if (out[(y * cutW + x) * 4 + 3] > 25) faceCovered++;
-    }
+  // Revised gate (Iteration 5R round 2): whole-face backstop, inner-face
+  // hard gate, and donor-space plausibility - see docs/HANDOFF.md's ROUND 2
+  // ADDENDUM. Coverage numbers are pixel-identical whether measured in
+  // cutout-space (here) or donor-space (cropping never resamples), but
+  // plausibility MUST use the true donor dimensions/faceBox (pre-crop),
+  // since cropping itself would otherwise distort the width-fraction and
+  // vertical-position checks.
+  const hairCoverageInFaceBox = computeAlphaCoverage(out, cutW, cutH, faceBox);
+  const innerFaceCoverage = computeAlphaCoverage(out, cutW, cutH, computeInnerFaceBox(faceBox));
+  const faceBoxPlausibility = checkFaceBoxPlausibility(faceBoxDonor, donorWidth, donorHeight);
+
+  const gateReasons: string[] = [...faceBoxPlausibility.reasons];
+  if (innerFaceCoverage >= INNER_FACE_MAX_COVERAGE) {
+    gateReasons.push(
+      `inner-face coverage ${innerFaceCoverage.toFixed(4)} >= ${INNER_FACE_MAX_COVERAGE}`
+    );
+  }
+  if (hairCoverageInFaceBox >= WHOLE_FACE_MAX_COVERAGE) {
+    gateReasons.push(
+      `whole-face coverage ${hairCoverageInFaceBox.toFixed(4)} >= ${WHOLE_FACE_MAX_COVERAGE}`
+    );
   }
 
   return {
@@ -303,6 +452,13 @@ export function computeCutout(
     width: cutW,
     height: cutH,
     faceBox,
-    hairCoverageInFaceBox: faceArea > 0 ? faceCovered / faceArea : 0,
+    hairCoverageInFaceBox,
+    innerFaceCoverage,
+    donorFaceBox: faceBoxDonor,
+    donorWidth,
+    donorHeight,
+    faceBoxPlausibility,
+    gatePass: gateReasons.length === 0,
+    gateReasons,
   };
 }

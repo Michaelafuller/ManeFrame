@@ -1,4 +1,14 @@
-import { blurMask, computeCutout, keepLargestRegion, sampleMaskBilinear } from '../extractCutout';
+import {
+  blurMask,
+  checkFaceBoxPlausibility,
+  computeAlphaCoverage,
+  computeCutout,
+  computeInnerFaceBox,
+  INNER_FACE_MAX_COVERAGE,
+  keepLargestRegion,
+  sampleMaskBilinear,
+  WHOLE_FACE_MAX_COVERAGE,
+} from '../extractCutout';
 import type { HairMask } from '../../segmentation/types';
 
 function maskOf(width: number, height: number, fill = 0): HairMask {
@@ -193,5 +203,132 @@ describe('computeCutout', () => {
     const face = maskOf(W, H);
     setRect(face, 12, 12, 27, 27);
     expect(computeCutout(donorPixels(W, H), W, H, hair, face)).toBeNull();
+  });
+
+  it('reports the revised-gate fields: gatePass true and empty reasons for a clean donor', () => {
+    const hair = maskOf(W, H);
+    setRect(hair, 8, 4, 31, 11); // hair band, off the face entirely
+    const face = maskOf(W, H);
+    setRect(face, 12, 12, 27, 27);
+    const cut = computeCutout(donorPixels(W, H), W, H, hair, face, { featherRadius: 0 })!;
+    expect(cut.gatePass).toBe(true);
+    expect(cut.gateReasons).toEqual([]);
+    expect(cut.faceBoxPlausibility.plausible).toBe(true);
+    expect(cut.innerFaceCoverage).toBe(0);
+    expect(cut.donorWidth).toBe(W);
+    expect(cut.donorHeight).toBe(H);
+    // Face box here is a 16x16 square donor-side, comfortably inside the plausibility bounds.
+    expect(cut.donorFaceBox.w).toBeCloseTo(16 / W, 6);
+  });
+
+  it('gatePass is false and gateReasons is populated when hair covers the inner face zone', () => {
+    // Hair covers the whole face box, including its inner zone.
+    const hair = maskOf(W, H);
+    setRect(hair, 10, 10, 29, 29);
+    const face = maskOf(W, H);
+    setRect(face, 12, 12, 27, 27);
+    const cut = computeCutout(donorPixels(W, H), W, H, hair, face, { featherRadius: 0 })!;
+    expect(cut.gatePass).toBe(false);
+    expect(cut.innerFaceCoverage).toBeGreaterThanOrEqual(INNER_FACE_MAX_COVERAGE);
+    expect(cut.gateReasons.some((r) => r.includes('inner-face'))).toBe(true);
+  });
+
+  it('gatePass is false when the donor face box is implausible even though occlusion reads 0 (the "shoulder-lock" case)', () => {
+    // A face box that is far too wide/short relative to its own donor image
+    // (aspect and width-fraction both violate the plausibility bounds) -
+    // reproduces the Iteration 5R round-1 "Model Features" bug: a
+    // mis-detected face-skin region (e.g. a bare shoulder) that numerically
+    // scores 0% hair coverage but is anchored to the wrong place entirely.
+    const W2 = 100;
+    const H2 = 100;
+    const hair = maskOf(W2, H2);
+    setRect(hair, 5, 5, 20, 15); // small hair patch, nowhere near the "face"
+    const face = maskOf(W2, H2);
+    // Wide, short "face" box occupying most of the image width - this is
+    // exactly the shape a shoulder/torso mis-detection produces.
+    setRect(face, 5, 60, 94, 94);
+    const cut = computeCutout(donorPixels(W2, H2), W2, H2, hair, face, { featherRadius: 0 })!;
+    expect(cut.hairCoverageInFaceBox).toBe(0);
+    expect(cut.innerFaceCoverage).toBe(0);
+    expect(cut.faceBoxPlausibility.plausible).toBe(false);
+    expect(cut.gatePass).toBe(false);
+    expect(cut.gateReasons.length).toBeGreaterThan(0);
+  });
+});
+
+describe('computeInnerFaceBox', () => {
+  it('shrinks the face box to the eyes/nose/mouth zone per the round-2 addendum fractions', () => {
+    const inner = computeInnerFaceBox({ x: 0.1, y: 0.2, w: 0.5, h: 0.6 });
+    expect(inner.x).toBeCloseTo(0.1 + 0.2 * 0.5, 6); // x + 0.20w
+    expect(inner.y).toBeCloseTo(0.2 + 0.15 * 0.6, 6); // y + 0.15h
+    expect(inner.w).toBeCloseTo(0.6 * 0.5, 6); // 0.60w
+    expect(inner.h).toBeCloseTo(0.7 * 0.6, 6); // 0.70h
+  });
+});
+
+describe('computeAlphaCoverage', () => {
+  it('computes the fraction of covered pixels inside a normalized box', () => {
+    const W = 10;
+    const H = 10;
+    const pixels = new Uint8Array(W * H * 4);
+    // Fill the left half with alpha=255, right half alpha=0.
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        pixels[(y * W + x) * 4 + 3] = x < 5 ? 255 : 0;
+      }
+    }
+    expect(computeAlphaCoverage(pixels, W, H, { x: 0, y: 0, w: 0.5, h: 1 })).toBeCloseTo(1, 6);
+    expect(computeAlphaCoverage(pixels, W, H, { x: 0.5, y: 0, w: 0.5, h: 1 })).toBeCloseTo(0, 6);
+    expect(computeAlphaCoverage(pixels, W, H, { x: 0, y: 0, w: 1, h: 1 })).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe('checkFaceBoxPlausibility', () => {
+  it('accepts a typical portrait face box (roughly square, moderate width, upper frame)', () => {
+    const result = checkFaceBoxPlausibility({ x: 0.3, y: 0.15, w: 0.35, h: 0.4 }, 1000, 1000);
+    expect(result.plausible).toBe(true);
+    expect(result.reasons).toEqual([]);
+  });
+
+  it('rejects an aspect ratio outside [0.55, 1.15] (too wide/short - the shoulder-lock signature)', () => {
+    const result = checkFaceBoxPlausibility({ x: 0.05, y: 0.6, w: 0.9, h: 0.34 }, 1000, 1000);
+    expect(result.plausible).toBe(false);
+    expect(result.reasons.some((r) => r.includes('aspect'))).toBe(true);
+  });
+
+  it('rejects a width fraction below 15% of the image (subject too small/distant)', () => {
+    const result = checkFaceBoxPlausibility({ x: 0.4, y: 0.3, w: 0.08, h: 0.1 }, 1000, 1000);
+    expect(result.plausible).toBe(false);
+    expect(result.reasons.some((r) => r.includes('width fraction'))).toBe(true);
+  });
+
+  it('rejects a width fraction above 60% of the image (extreme close-up crop) - the pixie-crop finding', () => {
+    // Reproduces the round-2 on-device finding for the shipped pixie-crop
+    // donor: face-box width fraction 0.621, just over the 0.60 cap.
+    const result = checkFaceBoxPlausibility(
+      { x: 0.3086, y: 0.2148, w: 0.6211, h: 0.7070 },
+      1024,
+      1024
+    );
+    expect(result.plausible).toBe(false);
+    expect(result.reasons.some((r) => r.includes('width fraction'))).toBe(true);
+  });
+
+  it('rejects a face box whose top edge sits in the bottom third of the image', () => {
+    const result = checkFaceBoxPlausibility({ x: 0.3, y: 0.75, w: 0.3, h: 0.25 }, 1000, 1000);
+    expect(result.plausible).toBe(false);
+    expect(result.reasons.some((r) => r.includes('bottom third'))).toBe(true);
+  });
+
+  it('accumulates multiple reasons when more than one bound is violated', () => {
+    const result = checkFaceBoxPlausibility({ x: 0, y: 0.9, w: 0.9, h: 0.09 }, 1000, 1000);
+    expect(result.plausible).toBe(false);
+    expect(result.reasons.length).toBeGreaterThan(1);
+  });
+});
+
+describe('gate threshold constants', () => {
+  it('inner-face gate is stricter than the whole-face backstop', () => {
+    expect(INNER_FACE_MAX_COVERAGE).toBeLessThan(WHOLE_FACE_MAX_COVERAGE);
   });
 });
