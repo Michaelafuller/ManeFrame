@@ -1,11 +1,13 @@
 appId: com.maneframe.app
-# "No face detected" hint acceptance (Iteration 5 / M6). Loads the bundled
-# no-face test image (a generated app-icon asset - not a photo of anyone,
-# and no camera/library involvement, per the standing privacy rule),
-# asserts the release-visible "No hair detected" hint with no style
-# selected, then selects a style and asserts the neutral "No face
-# detected - try a front-facing photo." hint renders instead of an error,
-# with no overlay placement stat (the placement engine returned null).
+# "No face detected" hint acceptance (Iteration 5 / M6, updated Iteration
+# 5R: Classic Bob reverted to "Art coming soon", Pixie Crop is the only
+# art-bearing style now - see docs/ART.md). Loads the bundled no-face test
+# image (a generated app-icon asset - not a photo of anyone, and no
+# camera/library involvement, per the standing privacy rule), asserts the
+# release-visible "No hair detected" hint with no style selected, then
+# selects a style and asserts the neutral "No face detected - try a
+# front-facing photo." hint renders instead of an error, with no overlay
+# placement stat (the placement engine returned null).
 #
 # *** DEV-MODE ONLY - NOT part of `npm run e2e`. *** Same run protocol as
 # the other flows-dev/ flows (Metro + deep link, no `launchApp` step).
@@ -53,9 +55,9 @@ appId: com.maneframe.app
 # an error (the red error text is a different element).
 - scrollUntilVisible:
     element:
-      text: "Classic Bob"
+      text: "Pixie Crop"
     direction: DOWN
-- tapOn: "Classic Bob"
+- tapOn: "Pixie Crop"
 - swipe:
     direction: DOWN
 - swipe:
@@ -64,5 +66,5 @@ appId: com.maneframe.app
     visible: "No face detected — try a front-facing photo."
     timeout: 30000
 # No placement stat may render when placement returned null.
-- assertNotVisible: "style: classic-bob @ .*"
+- assertNotVisible: "style: pixie-crop @ .*"
 - takeScreenshot: flows-dev/06-no-face-hint

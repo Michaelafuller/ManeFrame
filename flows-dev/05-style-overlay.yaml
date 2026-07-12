@@ -1,12 +1,15 @@
 appId: com.maneframe.app
 # Hairstyle overlay try-on acceptance on the bundled CC0 test portrait
-# (Iteration 5 / M6). Loads the bundled portrait via the dev diagnostic
+# (Iteration 5 / M6, updated Iteration 5R for the donor-hair art swap -
+# see docs/ART.md). Loads the bundled portrait via the dev diagnostic
 # button (see flows-dev/04-portrait-recolor.yaml for why that exists and
-# the privacy rule it upholds), selects the Classic Bob style chip,
-# asserts the machine-checkable overlay placement stat ("style:
-# classic-bob @ x,y,w,h" - rendered only when the placement engine
-# actually produced a transform), recolors with Teal @ Bold 1.0 through
-# the same Lab pipeline, exercises the nudge controls, and screenshots.
+# the privacy rule it upholds), selects the Pixie Crop style chip (the
+# only style with real donor-hair overlay art shipped this iteration -
+# Classic Bob reverted to "Art coming soon", see docs/ART.md), asserts
+# the machine-checkable overlay placement stat ("style: pixie-crop @
+# x,y,w,h" - rendered only when the placement engine actually produced a
+# transform), recolors with Teal @ Bold 1.0 through the same Lab
+# pipeline, exercises the nudge controls, and screenshots.
 #
 # *** DEV-MODE ONLY - NOT part of `npm run e2e`. *** The dev diagnostic
 # button and both stat lines are `__DEV__`-gated. Run protocol (Metro +
@@ -34,13 +37,13 @@ appId: com.maneframe.app
     timeout: 90000
 - assertVisible: "tflite segmentation"
 - assertNotVisible: "tflite failed.*"
-# Select the Classic Bob style chip (wrapped chip group between the
+# Select the Pixie Crop style chip (wrapped chip group between the
 # dev buttons and the color swatches).
 - scrollUntilVisible:
     element:
-      text: "Classic Bob"
+      text: "Pixie Crop"
     direction: DOWN
-- tapOn: "Classic Bob"
+- tapOn: "Pixie Crop"
 - swipe:
     direction: DOWN
 - swipe:
@@ -48,15 +51,15 @@ appId: com.maneframe.app
 # Machine-checkable placement stat: rendered only when a style is active
 # AND the placement engine produced a transform from the face-skin mask.
 - extendedWaitUntil:
-    visible: "style: classic-bob @ .*"
+    visible: "style: pixie-crop @ .*"
     timeout: 30000
-- assertVisible: "style: classic-bob @ -?\\d+,-?\\d+,\\d+,\\d+"
+- assertVisible: "style: pixie-crop @ -?\\d+,-?\\d+,\\d+,\\d+"
 # The no-face hint must NOT be showing (the bundled portrait has a face).
 - assertNotVisible: "No face detected.*"
 - extendedWaitUntil:
     notVisible: "Processing…"
     timeout: 30000
-- takeScreenshot: flows-dev/05-style-overlay-classic-bob
+- takeScreenshot: flows-dev/05-style-overlay-pixie-crop
 # Recolor overlay + hair: Teal @ Bold 1.0 (same scroll-to-bottom + swipe
 # technique as flow 04 - see its comment for the geometry).
 - swipe:
@@ -80,12 +83,12 @@ appId: com.maneframe.app
     direction: DOWN
 - swipe:
     direction: DOWN
-- assertVisible: "style: classic-bob @ .*"
-- takeScreenshot: flows-dev/05-style-overlay-classic-bob-teal
+- assertVisible: "style: pixie-crop @ .*"
+- takeScreenshot: flows-dev/05-style-overlay-pixie-crop-teal
 # Nudge controls stay wired: the stat survives a scale-up and a reset.
 - tapOn:
     id: "nudge-scale-up"
-- assertVisible: "style: classic-bob @ .*"
+- assertVisible: "style: pixie-crop @ .*"
 - tapOn:
     id: "nudge-reset"
-- assertVisible: "style: classic-bob @ .*"
+- assertVisible: "style: pixie-crop @ .*"
