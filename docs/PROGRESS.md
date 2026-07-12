@@ -330,3 +330,29 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
   pipeline, cut real hair to soft-alpha overlays anchored by the donor's
   detected face box; uniform scale only; face-occlusion unit gate. See
   HANDOFF.
+
+### Iteration 5R — ACCEPTED by planner (2026-07-12) — 3 real-hair styles shipped
+
+- Donor-extraction pipeline worked: pixie-crop, curly-shag (standout),
+  long-beach-waves shipped as real-hair cutouts; classic-bob, buzz-cut,
+  classic-lob are honest "Art coming soon" gaps. Full candidate record,
+  licensing decisions (incl. the endorsed personality-rights pull of the
+  named-officer donor), and gate evolution in docs/ART.md; iteration
+  narrative in docs/SUMMARY.md.
+- Gate lesson recorded: area-based occlusion metrics can false-negative
+  thin face-crossing features (classic-lob braid) — planner visual
+  review of art remains a mandatory, non-automatable stage.
+- Release build `347e14ca` (commit e31751a) installed on the user's
+  phone; 4/4 acceptance flows green; 232/232 unit tests.
+- **EAS Android build quota exhausted until 2026-08-01** (a redundant
+  executor resubmit attempt bounced; the planner's build was the last
+  slot). Any further iteration this month is dev-client/JS-only unless
+  it can wait for August.
+- Host/tooling instability continued (agent transcript losses, a
+  maestro/adb daemon wedge). Mitigation that worked: incremental
+  commits + decision records in ART/HANDOFF; the planner directly
+  performed the final mechanical leg (commit, build submit, install,
+  e2e) when executor sessions died.
+- Gate: user try-on of the three styles on their own head decides
+  whether M6 polish continues (more donors in August, per-row occlusion
+  gate idea, capture UX) or M5 (live camera) proceeds next.
