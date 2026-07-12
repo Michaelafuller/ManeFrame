@@ -28,11 +28,11 @@ import { recolorImageChunked } from '../color/recolorImage';
 import {
   computeHeadBox,
   computeMaskBoundingBox,
-  computePlacementFromFaceMask,
+  computeUniformPlacementFromFaceMask,
 } from '../placement/headBox';
 import type { AffineTransform } from '../placement/types';
 import { getOverlayAsset, hasOverlayArt } from '../overlays/registry';
-import { overlayPixelsToSkImage, rasterizeOverlaySvg } from '../overlays/rasterize';
+import { decodeOverlayAsset, overlayPixelsToSkImage } from '../overlays/rasterize';
 import { recolorOverlayImage } from '../overlays/recolorOverlay';
 import { MockHairSegmenter } from '../segmentation/mock';
 import { segmentBothWithFallback } from '../segmentation/selectSegmenter';
@@ -366,15 +366,31 @@ export default function PreviewScreen({
     [activeStyle]
   );
 
-  // Rasterize the selected style's SVG once per style change (Skia work -
-  // independent of color/intensity, which only recolor the same raster).
-  // `rasterizeOverlaySvg` is a synchronous, pure function of `overlayAsset`
-  // (no native async work, unlike photo decode/recolor), so this is a plain
-  // `useMemo`, not state+effect - cheaper and avoids an extra render.
-  const overlayRaster = useMemo(() => {
-    if (!overlayAsset) return null;
-    const raster = rasterizeOverlaySvg(overlayAsset.svg, overlayAsset.width, overlayAsset.height);
-    return raster ? { pixels: raster.pixels, width: raster.width, height: raster.height } : null;
+  // Decode the selected style's bundled raster cutout once per style change
+  // (Iteration 5R: real donor-hair PNGs, not the retired self-authored SVG
+  // art - independent of color/intensity, which only recolor the same
+  // raster). Genuinely async (asset resolution + Skia decode), so this is
+  // state+effect, not a plain useMemo.
+  const [overlayRaster, setOverlayRaster] = useState<{
+    pixels: Uint8Array;
+    width: number;
+    height: number;
+  } | null>(null);
+  const overlayRasterRunIdRef = useRef(0);
+
+  useEffect(() => {
+    const runId = ++overlayRasterRunIdRef.current;
+    (async () => {
+      if (!overlayAsset) {
+        if (overlayRasterRunIdRef.current === runId) setOverlayRaster(null);
+        return;
+      }
+      const decoded = await decodeOverlayAsset(overlayAsset.module);
+      if (overlayRasterRunIdRef.current !== runId) return;
+      setOverlayRaster(
+        decoded ? { pixels: decoded.pixels, width: decoded.width, height: decoded.height } : null
+      );
+    })();
   }, [overlayAsset]);
 
   // Recolor the rasterized overlay through the exact same Lab pipeline as
@@ -407,13 +423,17 @@ export default function PreviewScreen({
     })();
   }, [overlayRaster, activeColor, intensity]);
 
-  // Placement engine: face mask -> face box -> head box -> overlay
-  // transform. `null` distinctly means "no face detected" only when a
-  // style is actually selected and a face mask exists to test against -
-  // otherwise there's simply nothing to place yet.
+  // Placement engine (Iteration 5R contract): face mask -> face box ->
+  // UNIFORM overlay transform (scale = target face width / donor face
+  // width, top-centers aligned - no non-uniform stretch, which visibly
+  // distorted the rejected Iteration 5 SVG art). `overlayAsset.headBox` is
+  // the donor's own detected face box for raster cutout assets, not a
+  // generic head box - see docs/ART.md. `null` distinctly means "no face
+  // detected" only when a style is actually selected and a face mask
+  // exists to test against - otherwise there's simply nothing to place yet.
   const placement = useMemo(() => {
     if (!photo || !faceMask || !overlayAsset) return null;
-    return computePlacementFromFaceMask(
+    return computeUniformPlacementFromFaceMask(
       faceMask,
       overlayAsset.headBox,
       overlayAsset.width,

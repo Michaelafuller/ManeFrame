@@ -1,43 +1,33 @@
 import { OVERLAY_REGISTRY, getOverlayAsset, hasOverlayArt } from '../registry';
-import { OVERLAY_HEAD_BOX, OVERLAY_HEIGHT, OVERLAY_WIDTH } from '../svg/shared';
 
-const EXPECTED_STYLE_IDS = [
-  'pixie-crop',
-  'buzz-cut',
-  'classic-bob',
-  'classic-lob',
-  'long-beach-waves',
-  'curly-shag',
-];
+// Iteration 5R (M6 remediation): only this 1 of the 6 MVP styles shipped a
+// real donor-hair cutout that passed the licensing bar (including a
+// personality-rights check - the donor staged for buzz-cut turned out to
+// be a named, identifiable person's official military portrait and was
+// pulled before shipping) and the face-occlusion gate (< 20% donor
+// face-box hair coverage) with a correctly-detected face anchor - see
+// docs/ART.md for the full candidate-by-candidate record.
+const EXPECTED_STYLE_IDS = ['pixie-crop'];
 
 describe('OVERLAY_REGISTRY', () => {
-  it('has exactly the six MVP art-bearing style ids', () => {
+  it('has exactly the Iteration 5R shipped-art style ids', () => {
     expect(Object.keys(OVERLAY_REGISTRY).sort()).toEqual([...EXPECTED_STYLE_IDS].sort());
   });
 
-  it('every entry has non-empty SVG markup with a matching viewBox', () => {
+  it('every entry has a resolved module id and positive intrinsic dimensions', () => {
     for (const [id, entry] of Object.entries(OVERLAY_REGISTRY)) {
-      expect(entry.svg).toContain('<svg');
-      expect(entry.svg).toContain(`viewBox="0 0 ${OVERLAY_WIDTH} ${OVERLAY_HEIGHT}"`);
-      expect(entry.svg.length).toBeGreaterThan(100);
-      expect(entry.width).toBe(OVERLAY_WIDTH);
-      expect(entry.height).toBe(OVERLAY_HEIGHT);
-      expect(entry.headBox).toEqual(OVERLAY_HEAD_BOX);
+      // require()'ing an image asset resolves to a numeric id under Metro,
+      // but jest's asset transform mocks it as an object - assert it's
+      // defined rather than pin an environment-specific runtime type.
+      expect(entry.module).toBeDefined();
+      expect(entry.width).toBeGreaterThan(0);
+      expect(entry.height).toBeGreaterThan(0);
       // Sanity: every id is well-formed kebab-case, matching the catalog convention.
       expect(id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
     }
   });
 
-  it('every SVG is well-formed enough to be closed (naive tag balance check)', () => {
-    for (const entry of Object.values(OVERLAY_REGISTRY)) {
-      const opens = (entry.svg.match(/<svg[\s>]/g) ?? []).length;
-      const closes = (entry.svg.match(/<\/svg>/g) ?? []).length;
-      expect(opens).toBe(1);
-      expect(closes).toBe(1);
-    }
-  });
-
-  it('headBox is a valid normalized rect (0..1, positive size) for every entry', () => {
+  it('headBox (the donor face box) is a valid normalized rect (0..1, positive size) for every entry', () => {
     for (const entry of Object.values(OVERLAY_REGISTRY)) {
       const { x, y, w, h } = entry.headBox;
       expect(x).toBeGreaterThanOrEqual(0);
@@ -52,13 +42,13 @@ describe('OVERLAY_REGISTRY', () => {
 
 describe('getOverlayAsset / hasOverlayArt', () => {
   it('returns the asset for a known style id', () => {
-    expect(hasOverlayArt('classic-bob')).toBe(true);
-    expect(getOverlayAsset('classic-bob')).not.toBeNull();
+    expect(hasOverlayArt('pixie-crop')).toBe(true);
+    expect(getOverlayAsset('pixie-crop')).not.toBeNull();
   });
 
   it('returns null/false for a style id with no art yet', () => {
-    expect(hasOverlayArt('coily-afro')).toBe(false);
-    expect(getOverlayAsset('coily-afro')).toBeNull();
+    expect(hasOverlayArt('classic-bob')).toBe(false);
+    expect(getOverlayAsset('classic-bob')).toBeNull();
   });
 
   it('returns null/false for a nonexistent style id', () => {

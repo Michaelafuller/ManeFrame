@@ -1,14 +1,19 @@
 /**
- * Rasterizes a self-authored SVG hairstyle overlay (see
- * `src/overlays/registry.ts`) to an RGBA pixel buffer via Skia, the same
- * way `PreviewScreen.tsx`'s `decodePhoto` rasterizes a photo. Skia-backed
- * — not unit-testable in Jest (no native Skia runtime there; see
- * `src/ui/__tests__/App.test.tsx`'s Skia mock, which deliberately omits
- * `Skia.SVG`/`Skia.Surface` because this path is never exercised in
- * tests). Verified on-device instead (dev diagnostic + Maestro flow, see
- * docs/E2E.md).
+ * Decodes a bundled raster hairstyle-overlay asset (Iteration 5R / M6
+ * remediation: real donor-hair cutout PNGs, see `src/overlays/registry.ts`)
+ * into an RGBA pixel buffer via Skia, the same way `PreviewScreen.tsx`'s
+ * `decodePhoto` decodes a picked photo. Skia-backed — not exercised for
+ * real in Jest (no native Skia/expo-asset runtime there); `decodeOverlayAsset`
+ * is defensive (try/catch, returns `null` on any failure) so a test
+ * environment that stubs Skia/expo-asset out never throws. Verified for
+ * real on-device instead (dev diagnostic + Maestro flow, see docs/E2E.md).
+ *
+ * The self-authored SVG rasterization path from Iteration 5
+ * (`rasterizeOverlaySvg`) is retired along with the SVG art it rendered —
+ * see docs/PROGRESS.md's Iteration 5 planner review.
  */
 
+import { Asset } from 'expo-asset';
 import {
   AlphaType,
   ColorType,
@@ -17,7 +22,7 @@ import {
 } from '@shopify/react-native-skia';
 
 export interface RasterizedOverlay {
-  /** The rasterized image, ready to draw as a Skia layer. */
+  /** The decoded image, ready to draw as a Skia layer. */
   image: SkImage;
   /** Raw RGBA_8888 pixels of the same image, for the recolor pipeline. */
   pixels: Uint8Array;
@@ -26,38 +31,38 @@ export interface RasterizedOverlay {
 }
 
 /**
- * Renders `svgString` (a self-contained `<svg>...</svg>` document, as
- * produced by `src/overlays/svg/*.ts`) into a `width x height` raster and
- * reads back its RGBA pixels. Returns `null` on any failure (malformed
- * SVG, surface allocation failure, unreadable pixels) — callers should
- * treat that the same as "no overlay art available" rather than crash.
+ * Resolves and decodes a bundled overlay raster asset (a `require()`
+ * module id, as stored in `OverlayAsset.module`) into pixels. Returns
+ * `null` on any failure (asset resolution, decode, or pixel readback) —
+ * callers should treat that the same as "no overlay art available" rather
+ * than crash, matching `rasterizeOverlaySvg`'s old contract.
  */
-export function rasterizeOverlaySvg(
-  svgString: string,
-  width: number,
-  height: number
-): RasterizedOverlay | null {
-  const svg = Skia.SVG.MakeFromString(svgString);
-  if (!svg) return null;
+export async function decodeOverlayAsset(moduleId: number): Promise<RasterizedOverlay | null> {
+  try {
+    const asset = Asset.fromModule(moduleId);
+    if (!asset.localUri) {
+      await asset.downloadAsync();
+    }
+    if (!asset.localUri) return null;
 
-  const surface = Skia.Surface.Make(width, height);
-  if (!surface) return null;
+    const data = await Skia.Data.fromURI(asset.localUri);
+    const skImage = Skia.Image.MakeImageFromEncoded(data);
+    if (!skImage) return null;
 
-  const canvas = surface.getCanvas();
-  canvas.clear(Skia.Color('rgba(0, 0, 0, 0)'));
-  canvas.drawSvg(svg, width, height);
-  surface.flush();
+    const width = skImage.width();
+    const height = skImage.height();
+    const raw = skImage.readPixels(0, 0, {
+      width,
+      height,
+      colorType: ColorType.RGBA_8888,
+      alphaType: AlphaType.Unpremul,
+    });
+    if (!raw || !(raw instanceof Uint8Array)) return null;
 
-  const image = surface.makeImageSnapshot();
-  const raw = image.readPixels(0, 0, {
-    width,
-    height,
-    colorType: ColorType.RGBA_8888,
-    alphaType: AlphaType.Unpremul,
-  });
-  if (!raw || !(raw instanceof Uint8Array)) return null;
-
-  return { image, pixels: raw, width, height };
+    return { image: skImage, pixels: raw, width, height };
+  } catch {
+    return null;
+  }
 }
 
 /** Wraps a recolored RGBA_8888 pixel buffer back into a drawable SkImage. */

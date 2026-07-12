@@ -3,10 +3,10 @@
     "id": "pixie-crop",
     "name": "Pixie Crop",
     "assets": {
-      "front": "assets/hairstyles/pixie-crop/front.svg",
+      "front": "assets/hairstyles/pixie-crop/front.png",
       "leftThreeQuarter": "assets/hairstyles/pixie-crop/left-three-quarter.webp",
       "rightThreeQuarter": "assets/hairstyles/pixie-crop/right-three-quarter.webp",
-      "headBox": { "x": 0.29, "y": 0.17, "w": 0.42, "h": 0.38 }
+      "headBox": { "x": 0.028189910979228485, "y": 0.22940563086548488, "w": 0.9436201780415431, "h": 0.7507820646506778 }
     },
     "lengths": [
       "short"
@@ -27,8 +27,7 @@
     "id": "buzz-cut",
     "name": "Buzz Cut",
     "assets": {
-      "front": "assets/hairstyles/buzz-cut/front.svg",
-      "headBox": { "x": 0.29, "y": 0.17, "w": 0.42, "h": 0.38 }
+      "front": "assets/hairstyles/buzz-cut/front.webp"
     },
     "lengths": [
       "buzzed"
@@ -49,10 +48,9 @@
     "id": "classic-bob",
     "name": "Classic Bob",
     "assets": {
-      "front": "assets/hairstyles/classic-bob/front.svg",
+      "front": "assets/hairstyles/classic-bob/front.webp",
       "leftThreeQuarter": "assets/hairstyles/classic-bob/left-three-quarter.webp",
-      "rightThreeQuarter": "assets/hairstyles/classic-bob/right-three-quarter.webp",
-      "headBox": { "x": 0.29, "y": 0.17, "w": 0.42, "h": 0.38 }
+      "rightThreeQuarter": "assets/hairstyles/classic-bob/right-three-quarter.webp"
     },
     "lengths": [
       "chin"
@@ -94,8 +92,7 @@
     "id": "classic-lob",
     "name": "Classic Lob",
     "assets": {
-      "front": "assets/hairstyles/classic-lob/front.svg",
-      "headBox": { "x": 0.29, "y": 0.17, "w": 0.42, "h": 0.38 }
+      "front": "assets/hairstyles/classic-lob/front.webp"
     },
     "lengths": [
       "shoulder"
@@ -223,10 +220,9 @@
     "id": "long-beach-waves",
     "name": "Long Beach Waves",
     "assets": {
-      "front": "assets/hairstyles/long-beach-waves/front.svg",
+      "front": "assets/hairstyles/long-beach-waves/front.webp",
       "leftThreeQuarter": "assets/hairstyles/long-beach-waves/left-three-quarter.webp",
-      "rightThreeQuarter": "assets/hairstyles/long-beach-waves/right-three-quarter.webp",
-      "headBox": { "x": 0.29, "y": 0.17, "w": 0.42, "h": 0.38 }
+      "rightThreeQuarter": "assets/hairstyles/long-beach-waves/right-three-quarter.webp"
     },
     "lengths": [
       "long"
@@ -288,10 +284,9 @@
     "id": "curly-shag",
     "name": "Curly Shag",
     "assets": {
-      "front": "assets/hairstyles/curly-shag/front.svg",
+      "front": "assets/hairstyles/curly-shag/front.webp",
       "leftThreeQuarter": "assets/hairstyles/curly-shag/left-three-quarter.webp",
-      "rightThreeQuarter": "assets/hairstyles/curly-shag/right-three-quarter.webp",
-      "headBox": { "x": 0.29, "y": 0.17, "w": 0.42, "h": 0.38 }
+      "rightThreeQuarter": "assets/hairstyles/curly-shag/right-three-quarter.webp"
     },
     "lengths": [
       "medium"
