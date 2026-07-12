@@ -8,20 +8,23 @@ portraits**, segmented by the app's own on-device pipeline
 (`selfie_multiclass_256x256.tflite` → `segmentBoth` → `computeCutout`, see
 `src/overlays/extractCutout.ts`).
 
-## Outcome: 4 of 6 MVP styles shipped (round 1: 1; round 2: +3)
+## Outcome: 3 of 6 MVP styles shipped (round 1: 1; round 2: +2)
 
 **Round 1** shipped only **`pixie-crop`**; every other round-1 candidate
 was rejected (see the round-1 sections below). **Round 2** (2026-07-12,
 bounded search under the revised occlusion gate — `docs/HANDOFF.md`
 ROUND 2 ADDENDUM: inner-face < 0.15 hard gate, whole-face < 0.5
 backstop, face-box plausibility with the recalibrated 0.70 width cap)
-added **`classic-lob`**, **`curly-shag`**, and **`long-beach-waves`**
-from a fresh user-approved candidate sweep — see the "ROUND 2" sections
-below. **`classic-bob`** (no gate-passing candidate in either round) and
-**`buzz-cut`** (personality-rights pull in round 1, no anonymous CC0
-replacement found in round 2) ship as "Art coming soon" gaps. Per
-`docs/HANDOFF.md`: *"never lower the licensing or quality bar."* None
-was lowered; the gaps are reported here instead.
+added **`curly-shag`** and **`long-beach-waves`** from a fresh
+user-approved candidate sweep — see the "ROUND 2" sections below. Three
+styles ship as "Art coming soon" gaps: **`classic-bob`** (no
+gate-passing candidate in either round), **`buzz-cut`**
+(personality-rights pull in round 1, no anonymous CC0 replacement found
+in round 2), and **`classic-lob`** (round 2's donor passed the machine
+gate but was **rejected on planner visual review** — see its section
+below for the gate's false-negative lesson). Per `docs/HANDOFF.md`:
+*"never lower the licensing or quality bar."* None was lowered; the
+gaps are reported here instead.
 
 ---
 
@@ -218,7 +221,9 @@ corpus only, ~40 candidates triaged from low-res thumbnails, 9 full
 candidates user-approved for download in the main session, saved under
 unique names `donors/<style>-<slug>.jpg` per the round-2 protocol) was
 extracted on-device (dev client `32841af6` + Metro, rebuilt harness per
-the protocol below) under the revised gate. 4 of 9 passed; 3 shipped.
+the protocol below) under the revised gate. 4 of 9 passed the machine
+gate; 3 were initially shipped; 2 survived planner visual review
+(`classic-lob`'s passer was un-shipped — see its section).
 
 **Per-file license re-verification (2026-07-12):** every downloaded
 candidate's Commons file page was confirmed to carry the `{{Unsplash}}`
@@ -229,10 +234,31 @@ anonymous civilian stock photography — the round-1 "named individual in
 an institutional/official context" visual check was applied to every
 full-resolution download before extraction.
 
-## ROUND 2 SHIPPED: `classic-lob`
+## ROUND 2 REJECTED ON PLANNER VISUAL REVIEW: `classic-lob`
 
-- **Asset:** `assets/hairstyles/classic-lob/front.png` (722×641, 635,924
-  bytes, SHA-256 `6fa8d01...d719`)
+**Initially shipped in commit `e7d41b0`, then un-shipped on planner
+visual review (2026-07-12):** on the bundled test portrait, the donor's
+thin braid tuft (visible bottom-left inside the face box on the anchor
+visualization) renders across the target's cheek/mouth as a dark smudge
+(evidence: the since-removed `iter5r2-classic-lob-teal-bold.png`).
+`classic-lob` reverts to "Art coming soon" — asset, registry entry, and
+catalog anchor removed.
+
+**Gate lesson (false negative):** the donor's `innerFaceCoverage 0.0963`
+legitimately passed the < 0.15 inner-face gate, but the number was a
+false negative for a genuinely face-crossing feature — **the gate
+measures covered AREA, not placement salience**, so a thin strand/tuft
+crossing the mouth stays under the threshold while being exactly the
+artifact the gate exists to prevent. Any future gate revision should
+consider salience (e.g. per-row coverage across the inner box) alongside
+total area. The anchor-box visual check does not catch this either: it
+verifies where the anchor sits, not how the art lands on a *target*
+face — only the placed-on-portrait evidence screenshot surfaced it.
+
+Original record of the extraction (for the candidate table):
+
+- **Asset (removed):** was `assets/hairstyles/classic-lob/front.png`
+  (722×641, 635,924 bytes, SHA-256 `6fa8d01...d719`)
 - **Donor:** [File:Retro Bangs (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Retro_Bangs_(Unsplash).jpg),
   author Les Anderson (`lesanderson`), dated 2017-02-13, **CC0 1.0**
   (pre-cutoff `{{Unsplash}}` template, Wayback archive 2017-04-28),
@@ -246,11 +272,9 @@ full-resolution download before extraction.
 - **Anchor visual check:** PASS — face box rendered on the cutout sits
   squarely on the (correctly empty) face hole; the cutout reads as a
   complete lob silhouette with side-swept bangs.
-- **Note for planner review:** the donor pose is looking-down/three-quarter
-  rather than dead-front; the extracted hair shape reads correctly as a
-  lob, but the placement evidence should be judged with that in mind. The
-  runner-up "Angel Wings" candidate (below) also passed the gate with a
-  dead-front pose but at unusably low cutout resolution (197×242).
+- The runner-up "Angel Wings" candidate (below) also passed the gate
+  with a dead-front pose but at unusably low cutout resolution (197×242),
+  so `classic-lob` has no shippable donor and joins the gap list.
 
 ## ROUND 2 SHIPPED: `curly-shag`
 
@@ -291,12 +315,13 @@ full-resolution download before extraction.
   round-1 flat <0.20 rule it failed; under the revised gate it passes.)
 - **Anchor visual check:** PASS — face box correctly on the face region
   (upper-left of the cutout).
-- **FLAGGED for planner review:** the donor's hair is windblown,
-  streaming dramatically to one side rather than draping/framing
-  symmetrically. The machine gate and anchor are sound, but whether the
-  placed overlay *reads* as "long beach waves" (vs. "a gust of wind") is
-  exactly the kind of visual judgment round 1 taught us not to infer
-  from a passing number — judge from the evidence screenshots.
+- **Flagged for planner review, ACCEPTED (2026-07-12):** the donor's
+  hair is windblown, streaming dramatically to one side rather than
+  draping/framing symmetrically. The planner reviewed the placed
+  evidence (`docs/evidence/iter5r2-long-beach-waves-natural-black08.png`)
+  and ruled the windblown look SHIPS — it suits the "beach waves" style
+  name (wind-swept is on-brand for the beach), so this is a deliberate
+  aesthetic acceptance, not an oversight.
 
 ## ROUND 2 REJECTED
 
@@ -306,7 +331,8 @@ bottom third).**
 
 | Style | Candidate | Result |
 |---|---|---|
-| classic-lob | "Angel Wings" (Christopher Ayme, CC0) | **PASSED the gate** (inner 0.0544, whole 0.3485, plausible) but not shipped: cutout only 197×242px — below the resolution bar round 1 set when it rejected a 98×122 cutout as unusable; `classic-lob` shipped the higher-resolution "Retro Bangs" passer instead |
+| classic-lob | "Retro Bangs" (Les Anderson, CC0) | **PASSED the gate** (inner 0.0963, whole 0.4148, plausible) but **REJECTED on planner visual review** — thin braid tuft crosses the target's cheek/mouth; see the false-negative section above |
+| classic-lob | "Angel Wings" (Christopher Ayme, CC0) | **PASSED the gate** (inner 0.0544, whole 0.3485, plausible) but not shipped: cutout only 197×242px — below the resolution bar round 1 set when it rejected a 98×122 cutout as unusable |
 | curly-shag | "Woman with purple curly hair" (Tiko Giorgadze, CC0) | FAIL — face-box width fraction 0.121 < 0.15 (subject too small in frame) |
 | long-beach-waves | "Wind Blown Hair" (Ayo Ogunseinde, CC0) | FAIL — face-box aspect w/h 1.361 > 1.15 (mis-detection; full-res vetting had already flagged a heavy strand crossing the nose/mouth) |
 | long-beach-waves | "Los Angeles woman in white" (Edwin Andrade, CC0) | FAIL — face-box width fraction 0.059 (full-body shot, subject far too small) |

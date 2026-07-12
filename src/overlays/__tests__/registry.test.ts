@@ -1,16 +1,20 @@
 import { OVERLAY_REGISTRY, getOverlayAsset, hasOverlayArt } from '../registry';
 
-// Iteration 5R (M6 remediation): 4 of the 6 MVP styles ship real
+// Iteration 5R (M6 remediation): 3 of the 6 MVP styles ship real
 // donor-hair cutouts that passed the licensing bar (including a
-// personality-rights check) and the face-occlusion gate - pixie-crop from
-// round 1, classic-lob / curly-shag / long-beach-waves from round 2's
-// bounded search under the revised gate (inner-face < 0.15, whole-face
-// < 0.5 backstop, face-box plausibility). classic-bob (no gate-passing
-// candidate in either round) and buzz-cut (round 1's donor was a named
-// officer's official military portrait, pulled; round 2 found no
-// anonymous CC0 replacement) ship as gaps - see docs/ART.md for the full
-// candidate-by-candidate record.
-const EXPECTED_STYLE_IDS = ['pixie-crop', 'classic-lob', 'curly-shag', 'long-beach-waves'];
+// personality-rights check), the face-occlusion gate, AND planner visual
+// review - pixie-crop from round 1, curly-shag / long-beach-waves from
+// round 2's bounded search under the revised gate (inner-face < 0.15,
+// whole-face < 0.5 backstop, face-box plausibility). Gaps: classic-bob
+// (no gate-passing candidate in either round), buzz-cut (round 1's donor
+// was a named officer's official military portrait, pulled; round 2
+// found no anonymous CC0 replacement), and classic-lob (its round-2
+// donor passed the machine gate at inner-face 0.0963 but was rejected on
+// planner visual review - a thin braid tuft crosses the target's
+// cheek/mouth; the gate measures covered AREA, not placement salience,
+// so thin face-crossing features are a known false-negative mode) - see
+// docs/ART.md for the full candidate-by-candidate record.
+const EXPECTED_STYLE_IDS = ['pixie-crop', 'curly-shag', 'long-beach-waves'];
 
 describe('OVERLAY_REGISTRY', () => {
   it('has exactly the Iteration 5R shipped-art style ids', () => {

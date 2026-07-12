@@ -279,20 +279,22 @@ describe('hairstyle overlay art integrity (Iteration 5R / M6 remediation)', () =
     expect(catalogArtBearingIds).toEqual(registryIds);
   });
 
-  // Iteration 5R ships real donor-hair cutouts for 4 of the 6 MVP styles:
-  // pixie-crop (round 1) plus classic-lob / curly-shag / long-beach-waves
-  // (round 2's bounded search under the revised occlusion gate). The
-  // remaining 2 ship as "Art coming soon" gaps (no assets.headBox):
-  // buzz-cut's round-1 donor was an official military portrait of a named,
+  // Iteration 5R ships real donor-hair cutouts for 3 of the 6 MVP styles:
+  // pixie-crop (round 1) plus curly-shag / long-beach-waves (round 2's
+  // bounded search under the revised occlusion gate). The remaining 3
+  // ship as "Art coming soon" gaps (no assets.headBox): buzz-cut's
+  // round-1 donor was an official military portrait of a named,
   // identifiable person (pulled - a personality-rights problem, not a
-  // licensing one) with no anonymous CC0 replacement found in round 2, and
+  // licensing one) with no anonymous CC0 replacement found in round 2;
   // no classic-bob candidate passed the face-occlusion/plausibility gate
-  // in either round (see docs/ART.md for the full candidate record).
-  it('has exactly 4 art-bearing styles (Iteration 5R donor-hair MVP, round 2)', () => {
+  // in either round; and classic-lob's round-2 donor passed the machine
+  // gate but was rejected on planner visual review (a thin braid tuft
+  // crosses the target's face - the area-based gate can't see thin
+  // face-crossing features). See docs/ART.md for the full record.
+  it('has exactly 3 art-bearing styles (Iteration 5R donor-hair MVP, round 2)', () => {
     const catalogArtBearingIds = hairstyles.filter((s) => s.assets.headBox !== undefined);
-    expect(catalogArtBearingIds).toHaveLength(4);
+    expect(catalogArtBearingIds).toHaveLength(3);
     expect(catalogArtBearingIds.map((s) => s.id).sort()).toEqual([
-      'classic-lob',
       'curly-shag',
       'long-beach-waves',
       'pixie-crop',

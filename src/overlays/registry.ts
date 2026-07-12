@@ -23,14 +23,20 @@
  * Iteration 5R round 1 shipped only pixie-crop; round 2's bounded search
  * (revised occlusion gate: inner-face < 0.15, whole-face < 0.5 backstop,
  * face-box plausibility — see `src/overlays/extractCutout.ts`) added
- * classic-lob, curly-shag, and long-beach-waves from new user-approved
- * CC0 donors. `classic-bob` (no candidate passed the gate in either
- * round) and `buzz-cut` (round 1's staged donor was an official U.S.
- * military portrait of a named, identifiable officer — a
- * personality-rights problem — and round 2 found no anonymous CC0
- * replacement with visible buzz-cut-length hair) ship as catalog gaps
- * ("Art coming soon"). See docs/ART.md for the full
- * candidate-by-candidate record.
+ * curly-shag and long-beach-waves from new user-approved CC0 donors.
+ * Three styles ship as catalog gaps ("Art coming soon"):
+ * - `classic-bob`: no candidate passed the gate in either round.
+ * - `buzz-cut`: round 1's staged donor was an official U.S. military
+ *   portrait of a named, identifiable officer — a personality-rights
+ *   problem — and round 2 found no anonymous CC0 replacement with
+ *   visible buzz-cut-length hair.
+ * - `classic-lob`: round 2's "Retro Bangs" donor passed the machine gate
+ *   (inner-face 0.0963) but was REJECTED on planner visual review — a
+ *   thin braid tuft crosses the target's cheek/mouth as a dark smudge.
+ *   A false negative for the gate: it measures covered AREA, not
+ *   placement salience, so a thin face-crossing feature stays under the
+ *   threshold.
+ * See docs/ART.md for the full candidate-by-candidate record.
  */
 
 export interface OverlayAsset {
@@ -53,12 +59,6 @@ export const OVERLAY_REGISTRY: Readonly<Record<string, OverlayAsset>> = Object.f
     674,
     959,
     { x: 0.028189910979228485, y: 0.22940563086548488, w: 0.9436201780415431, h: 0.7507820646506778 }
-  ),
-  'classic-lob': asset(
-    require('../../assets/hairstyles/classic-lob/front.png'),
-    722,
-    641,
-    { x: 0.16620498614958448, y: 0.2896048654446178, w: 0.47645429362880887, h: 0.5514394013260531 }
   ),
   'curly-shag': asset(
     require('../../assets/hairstyles/curly-shag/front.png'),

@@ -4,8 +4,9 @@ appId: com.maneframe.app
 # see docs/ART.md). Loads the bundled portrait via the dev diagnostic
 # button (see flows-dev/04-portrait-recolor.yaml for why that exists and
 # the privacy rule it upholds), selects the Pixie Crop style chip (one
-# of the 4 styles with real donor-hair overlay art as of Iteration 5R
-# round 2 - classic-bob/buzz-cut are "Art coming soon", see docs/ART.md;
+# of the 3 styles with real donor-hair overlay art as of Iteration 5R
+# round 2 - classic-bob/buzz-cut/classic-lob are "Art coming soon", see
+# docs/ART.md;
 # per-style placement evidence lives in docs/evidence/iter5r2-*), asserts
 # the machine-checkable overlay placement stat ("style: pixie-crop @
 # x,y,w,h" - rendered only when the placement engine actually produced a

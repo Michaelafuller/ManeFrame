@@ -97,13 +97,7 @@
     "id": "classic-lob",
     "name": "Classic Lob",
     "assets": {
-      "front": "assets/hairstyles/classic-lob/front.png",
-      "headBox": {
-        "x": 0.16620498614958448,
-        "y": 0.2896048654446178,
-        "w": 0.47645429362880887,
-        "h": 0.5514394013260531
-      }
+      "front": "assets/hairstyles/classic-lob/front.webp"
     },
     "lengths": [
       "shoulder"
