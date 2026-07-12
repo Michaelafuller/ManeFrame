@@ -30,19 +30,19 @@ lowered; the gap is reported here instead.
   inherited the donor file (`donors/pixie-crop.jpg`, gitignored,
   SHA-256 `9045c8f...9eac`, 487,719 bytes) and the state summary "6
   approved originals downloaded... pixie-crop USABLE" from the handoff
-  context, but **the original source URL was not preserved in any
-  committed doc and could not be reconstructed** — Wikimedia Commons/
-  Unsplash reverse-image lookup was not attempted (would require
-  downloading/fetching against a specific person's likeness without a
-  found source, which this session chose not to do speculatively).
-  **Action needed: the user/planner should confirm or supply the original
-  source URL + license before this asset goes into any build wider than
-  the current dev/preview loop.** Visually the donor photo is professional
-  studio/editorial portraiture (a posed beauty shot against a plain dark
-  background, purple eye makeup, no identifying text, institutional
-  markings, or name) — a materially different risk profile than the
-  `buzz-cut` donor below, but not yet independently license-verified by
-  this session.
+  context, but the original source URL was not preserved in any committed
+  doc and could not be reconstructed by that session.
+  **PROVENANCE RESTORED (planner, 2026-07-12):** the source survives in
+  the main session's approval record from the first Iteration 5R executor
+  request and was re-verified against Wikimedia Commons on 2026-07-12:
+  [File:Pixie Cut (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Pixie_Cut_(Unsplash).jpg),
+  author Janko Ferlič, **CC0 1.0** (Unsplash upload predating the
+  2017-06-05 license change), original 4912×4912, anonymous model (no
+  personal identification in the file description). This matches the
+  inherited donor file's content (professional studio beauty shot, plain
+  dark background), and the download of exactly this file was
+  user-approved on 2026-07-12 in the main session. License bar met;
+  asset cleared for release builds.
 - **Extraction result (on-device, this session, re-run against current
   `extractCutout.ts` at commit `df9243c` to get fresh, consistent
   numbers):**
