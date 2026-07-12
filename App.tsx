@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SearchScreen from './src/ui/SearchScreen';
 import PreviewScreen from './src/ui/PreviewScreen';
+import { type Theme, useTheme } from './src/ui/theme';
 import type { HairColor, Hairstyle } from './src/catalog/types';
 
 type Tab = 'search' | 'preview';
@@ -14,6 +15,8 @@ function AppContent() {
   const [selectedColor, setSelectedColor] = useState<HairColor | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<Hairstyle | null>(null);
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   function handleSelectColor(color: HairColor) {
     setSelectedColor(color);
@@ -65,32 +68,34 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  content: {
-    flex: 1,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    backgroundColor: '#fff',
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  tabLabel: {
-    fontSize: 14,
-    color: '#888',
-    fontWeight: '500',
-  },
-  tabLabelActive: {
-    color: '#222',
-    fontWeight: '700',
-  },
-});
+function makeStyles(theme: Theme) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    content: {
+      flex: 1,
+    },
+    tabBar: {
+      flexDirection: 'row',
+      borderTopWidth: 1,
+      borderTopColor: theme.muted,
+      backgroundColor: theme.surface,
+    },
+    tabButton: {
+      flex: 1,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    tabLabel: {
+      fontSize: 14,
+      color: theme.muted,
+      fontWeight: '500',
+    },
+    tabLabelActive: {
+      color: theme.primary,
+      fontWeight: '700',
+    },
+  });
+}

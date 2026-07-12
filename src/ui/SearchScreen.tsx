@@ -16,6 +16,7 @@ import { hasOverlayArt } from '../overlays/registry';
 import { parseQuery } from '../search/parser';
 import { searchHairstyles, searchColors } from '../search/scorer';
 import { ColorSwatch } from './ColorSwatch';
+import { type Theme, useTheme } from './theme';
 
 function matchedTags(style: Hairstyle): string[] {
   return [...style.lengths, ...style.fringe, ...style.textures];
@@ -26,11 +27,13 @@ function HairstyleResult({
   colors,
   onSelectColor,
   onSelectStyle,
+  styles,
 }: {
   style: Hairstyle;
   colors: HairColor[];
   onSelectColor?: (color: HairColor) => void;
   onSelectStyle?: (style: Hairstyle) => void;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   const artBearing = hasOverlayArt(style.id);
   return (
@@ -75,6 +78,8 @@ export default function SearchScreen({
   const [query, setQuery] = useState('');
   const allColors = useMemo(() => loadColors(), []);
   const allHairstyles = useMemo(() => loadHairstyles(), []);
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const parsed = useMemo(() => parseQuery(query), [query]);
   const styleResults = useMemo(
@@ -94,7 +99,7 @@ export default function SearchScreen({
           testID="search-input"
           style={styles.searchBox}
           placeholder="Try 'shoulder length with bangs'"
-          placeholderTextColor="#888"
+          placeholderTextColor={theme.muted}
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
@@ -114,6 +119,7 @@ export default function SearchScreen({
               colors={colorResults}
               onSelectColor={onSelectColor}
               onSelectStyle={onSelectStyle}
+              styles={styles}
             />
           )}
           ListEmptyComponent={
@@ -125,89 +131,91 @@ export default function SearchScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#222',
-    marginBottom: 12,
-  },
-  searchBox: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: '#222',
-    backgroundColor: '#fafafa',
-  },
-  resultCount: {
-    marginTop: 8,
-    marginBottom: 8,
-    fontSize: 13,
-    color: '#666',
-  },
-  resultCard: {
-    borderWidth: 1,
-    borderColor: '#eee',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: '#fdfdfd',
-  },
-  resultHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  resultName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222',
-  },
-  tryOnButton: {
-    backgroundColor: '#222',
-    borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  tryOnButtonLabel: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  comingSoonBadge: {
-    fontSize: 11,
-    color: '#8a6d00',
-    backgroundColor: '#fff8e1',
-    borderWidth: 1,
-    borderColor: '#e6d18a',
-    borderRadius: 6,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    overflow: 'hidden',
-  },
-  resultTags: {
-    fontSize: 12,
-    color: '#777',
-    marginTop: 2,
-  },
-  swatchRow: {
-    marginTop: 8,
-  },
-  emptyText: {
-    marginTop: 24,
-    textAlign: 'center',
-    color: '#888',
-  },
-});
+function makeStyles(theme: Theme) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    container: {
+      flex: 1,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: '600',
+      color: theme.primary,
+      marginBottom: 12,
+    },
+    searchBox: {
+      borderWidth: 1,
+      borderColor: theme.muted,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 16,
+      color: theme.text,
+      backgroundColor: theme.surface,
+    },
+    resultCount: {
+      marginTop: 8,
+      marginBottom: 8,
+      fontSize: 13,
+      color: theme.muted,
+    },
+    resultCard: {
+      borderWidth: 1,
+      borderColor: theme.muted,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 10,
+      backgroundColor: theme.surface,
+    },
+    resultHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    resultName: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.text,
+    },
+    tryOnButton: {
+      backgroundColor: theme.primary,
+      borderRadius: 6,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+    },
+    tryOnButtonLabel: {
+      color: theme.onPrimary,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    comingSoonBadge: {
+      fontSize: 11,
+      color: theme.hint,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.hint,
+      borderRadius: 6,
+      paddingVertical: 3,
+      paddingHorizontal: 8,
+      overflow: 'hidden',
+    },
+    resultTags: {
+      fontSize: 12,
+      color: theme.muted,
+      marginTop: 2,
+    },
+    swatchRow: {
+      marginTop: 8,
+    },
+    emptyText: {
+      marginTop: 24,
+      textAlign: 'center',
+      color: theme.muted,
+    },
+  });
+}

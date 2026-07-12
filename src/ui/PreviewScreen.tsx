@@ -39,6 +39,7 @@ import { segmentBothWithFallback } from '../segmentation/selectSegmenter';
 import { TfliteHairSegmenter } from '../segmentation/tflite';
 import type { FaceMask, HairMask } from '../segmentation/types';
 import { ColorSwatch } from './ColorSwatch';
+import { type Theme, useTheme } from './theme';
 
 /** Photos are downscaled to at most this many pixels on their long side. */
 const MAX_PHOTO_DIMENSION = 768;
@@ -187,6 +188,8 @@ export default function PreviewScreen({
   );
   const tfliteSegmenter = useMemo(() => new TfliteHairSegmenter(), []);
   const mockSegmenter = useMemo(() => new MockHairSegmenter(), []);
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const [activeColor, setActiveColor] = useState<HairColor>(
     selectedColor ?? allColors[0]
@@ -711,7 +714,7 @@ export default function PreviewScreen({
                 </Canvas>
                 {isProcessing && (
                   <View style={styles.processingOverlay}>
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color={theme.badgeText} />
                     <Text style={styles.processingLabel}>Processing…</Text>
                   </View>
                 )}
@@ -965,225 +968,233 @@ export default function PreviewScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#222',
-    marginBottom: 12,
-  },
-  pickButton: {
-    backgroundColor: '#222',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  pickButtonLabel: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  canvasWrapper: {
-    width: '100%',
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    marginBottom: 8,
-    position: 'relative',
-  },
-  canvasPressable: {
-    flex: 1,
-  },
-  canvas: {
-    flex: 1,
-  },
-  processingOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  processingLabel: {
-    color: '#fff',
-    marginTop: 8,
-    fontSize: 13,
-  },
-  segmenterBadge: {
-    position: 'absolute',
-    right: 8,
-    top: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  segmenterBadgeLabel: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  segmentationErrorHint: {
-    fontSize: 11,
-    color: '#b00020',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  hairStatText: {
-    fontSize: 11,
-    color: '#555',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  infoHint: {
-    fontSize: 12,
-    color: '#8a6d00',
-    textAlign: 'center',
-    marginBottom: 6,
-    paddingHorizontal: 8,
-  },
-  hint: {
-    fontSize: 12,
-    color: '#888',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  nudgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  nudgeButton: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  nudgeButtonLabel: {
-    fontSize: 14,
-    color: '#333',
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  secondaryButtonLabel: {
-    color: '#333',
-    fontSize: 14,
-  },
-  devTestPortraitButton: {
-    borderWidth: 1,
-    borderColor: '#8a6d00',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    paddingVertical: 8,
-    alignItems: 'center',
-    marginBottom: 16,
-    backgroundColor: '#fff8e1',
-  },
-  devTestPortraitButtonLabel: {
-    color: '#8a6d00',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  errorText: {
-    color: '#b00020',
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#555',
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  styleRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 10,
-  },
-  styleChip: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginRight: 8,
-    marginBottom: 6,
-  },
-  styleChipActive: {
-    backgroundColor: '#222',
-    borderColor: '#222',
-  },
-  styleChipLabel: {
-    fontSize: 13,
-    color: '#333',
-  },
-  styleChipLabelActive: {
-    color: '#fff',
-  },
-  swatchRow: {
-    marginBottom: 16,
-  },
-  intensityRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  intensityButton: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginRight: 8,
-  },
-  intensityButtonActive: {
-    backgroundColor: '#222',
-    borderColor: '#222',
-  },
-  intensityLabel: {
-    fontSize: 13,
-    color: '#333',
-  },
-  intensityLabelActive: {
-    color: '#fff',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    paddingVertical: 8,
-    paddingBottom: 24,
-  },
-  modalOption: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  modalOptionLabel: {
-    fontSize: 16,
-    color: '#222',
-  },
-});
+// Two achromatic scrims (processingOverlay, modalBackdrop) and the
+// canvasWrapper's black letterboxing backdrop are deliberately left as
+// literal rgba()/black values, not theme tokens: they're part of the photo
+// canvas's own rendering chrome (docs/HANDOFF.md's "photo canvas ... is
+// CONTENT, not chrome" carve-out extends to its backdrop/dimming, which is
+// black in both themes by convention, same as a camera viewfinder).
+function makeStyles(theme: Theme) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    container: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 24,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: '600',
+      color: theme.primary,
+      marginBottom: 12,
+    },
+    pickButton: {
+      backgroundColor: theme.primary,
+      borderRadius: 8,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    pickButtonLabel: {
+      color: theme.onPrimary,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    canvasWrapper: {
+      width: '100%',
+      borderRadius: 8,
+      overflow: 'hidden',
+      backgroundColor: '#000',
+      marginBottom: 8,
+      position: 'relative',
+    },
+    canvasPressable: {
+      flex: 1,
+    },
+    canvas: {
+      flex: 1,
+    },
+    processingOverlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    processingLabel: {
+      color: theme.badgeText,
+      marginTop: 8,
+      fontSize: 13,
+    },
+    segmenterBadge: {
+      position: 'absolute',
+      right: 8,
+      top: 8,
+      backgroundColor: theme.badgeOverlay,
+      borderRadius: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    segmenterBadgeLabel: {
+      color: theme.badgeText,
+      fontSize: 10,
+      fontWeight: '600',
+    },
+    segmentationErrorHint: {
+      fontSize: 11,
+      color: theme.error,
+      textAlign: 'center',
+      marginBottom: 4,
+    },
+    hairStatText: {
+      fontSize: 11,
+      color: theme.muted,
+      textAlign: 'center',
+      marginBottom: 4,
+    },
+    infoHint: {
+      fontSize: 12,
+      color: theme.hint,
+      textAlign: 'center',
+      marginBottom: 6,
+      paddingHorizontal: 8,
+    },
+    hint: {
+      fontSize: 12,
+      color: theme.muted,
+      textAlign: 'center',
+      marginBottom: 12,
+    },
+    nudgeRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+    nudgeButton: {
+      borderWidth: 1,
+      borderColor: theme.muted,
+      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      marginRight: 6,
+      marginBottom: 6,
+    },
+    nudgeButtonLabel: {
+      fontSize: 14,
+      color: theme.text,
+    },
+    secondaryButton: {
+      borderWidth: 1,
+      borderColor: theme.muted,
+      borderRadius: 8,
+      paddingVertical: 10,
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    secondaryButtonLabel: {
+      color: theme.text,
+      fontSize: 14,
+    },
+    devTestPortraitButton: {
+      borderWidth: 1,
+      borderColor: theme.hint,
+      borderStyle: 'dashed',
+      borderRadius: 8,
+      paddingVertical: 8,
+      alignItems: 'center',
+      marginBottom: 16,
+      backgroundColor: theme.surface,
+    },
+    devTestPortraitButtonLabel: {
+      color: theme.hint,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    errorText: {
+      color: theme.error,
+      fontSize: 13,
+      marginBottom: 12,
+    },
+    sectionLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: theme.muted,
+      marginBottom: 8,
+      marginTop: 4,
+    },
+    styleRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: 10,
+    },
+    styleChip: {
+      borderWidth: 1,
+      borderColor: theme.muted,
+      borderRadius: 16,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      marginRight: 8,
+      marginBottom: 6,
+    },
+    styleChipActive: {
+      backgroundColor: theme.selectionBackground,
+      borderColor: theme.accent,
+    },
+    styleChipLabel: {
+      fontSize: 13,
+      color: theme.text,
+    },
+    styleChipLabelActive: {
+      color: theme.onSelectionBackground,
+    },
+    swatchRow: {
+      marginBottom: 16,
+    },
+    intensityRow: {
+      flexDirection: 'row',
+      marginBottom: 16,
+    },
+    intensityButton: {
+      borderWidth: 1,
+      borderColor: theme.muted,
+      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      marginRight: 8,
+    },
+    intensityButtonActive: {
+      backgroundColor: theme.selectionBackground,
+      borderColor: theme.accent,
+    },
+    intensityLabel: {
+      fontSize: 13,
+      color: theme.text,
+    },
+    intensityLabelActive: {
+      color: theme.onSelectionBackground,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'flex-end',
+    },
+    modalSheet: {
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: 12,
+      borderTopRightRadius: 12,
+      paddingVertical: 8,
+      paddingBottom: 24,
+    },
+    modalOption: {
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+    },
+    modalOptionLabel: {
+      fontSize: 16,
+      color: theme.text,
+    },
+  });
+}
