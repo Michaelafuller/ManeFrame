@@ -22,9 +22,18 @@ the single EAS build ships whatever has passed.
   framing).
 - FACE-BOX PLAUSIBILITY (hard, fixes the shoulder-lock false pass):
   reject the extraction if the detected face box has aspect w/h outside
-  [0.55, 1.15], or width outside [15%, 60%] of image width, or its top
+  [0.55, 1.15], or width outside [15%, 70%] of image width, or its top
   edge in the bottom third of the image. On rejection, the donor fails
   loudly — never score occlusion against an implausible box.
+  *(Planner recalibration 2026-07-12: upper width cap raised 0.60 →
+  0.70 after it false-failed the shipped, visually-verified pixie-crop
+  close-crop donor at 0.621. The cap is a mis-detection proxy, and
+  legitimate close-crop portraiture can exceed 0.60; the 0.60–0.70 band
+  is designated the "close-crop band" where the mandatory
+  anchor-render visual check is the effective backstop. pixie-crop
+  RULING: stays shipped. All other round-2 re-score failures stand:
+  the three too-small/aspect fails are unaffected by this cap, and
+  curly-shag's 0.364 inner-face fail is a genuine face-drape.)*
 - The anchor-box-rendered-on-cutout visual check from round 1 stays
   mandatory per shipped style.
 Apply the revised gate in BOTH the extraction harness and the
@@ -45,10 +54,24 @@ downloads) is FREE — do that first; it may shrink the download list.
 If a style still has no passing candidate after this round, it ships as
 a gap ("Art coming soon") — no third round this iteration.
 
+**Round-2 search go-ahead (planner, 2026-07-12):** the free re-score is
+exhausted (donor filenames were overwritten in round 1, so only
+last-tried candidates survived — from now on save donors under unique
+names, `donors/<style>-<slug>.jpg`). Proceed with the bounded
+new-candidate search for classic-bob, classic-lob, long-beach-waves,
+curly-shag + an anonymous buzz-cut donor, under the recalibrated gate.
+Approval protocol unchanged (full list → main session → wait). This IS
+the round-2 search, not a third round; after it, remaining gaps ship as
+"Art coming soon".
+
+**EAS note:** build 80a980d7 un-hung and FINISHED on Expo's side, but it
+contains the REJECTED iteration-5 art — never install or ship it. At
+build time there is nothing to cancel; just submit the new preview
+build (#11 of 15) after planner sign-off.
+
 **Then:** evidence (iter5r2- prefix, every shipped style, one teal-bold,
-one natural) → STOP for planner review → after sign-off: cancel hung EAS
-build 80a980d7, submit the ONE preview build, request install approval,
-full e2e, SUMMARY.md.
+one natural) → STOP for planner review → after sign-off: submit the ONE
+preview build, request install approval, full e2e, SUMMARY.md.
 
 ---
 
