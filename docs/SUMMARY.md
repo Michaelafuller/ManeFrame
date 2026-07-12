@@ -519,3 +519,44 @@ eas build:list --platform android --limit 3 --json --non-interactive   # read-on
 adb install -r <preview-1eac9823.apk>                                   # then deleted the APK
 npm run e2e                          # 4/4 flows pass (preview build 1eac9823)
 ```
+
+---
+
+# SUMMARY — Iterations 5 + 5R (M6 hairstyle overlay try-on, MVP)
+
+**Executor:** Sonnet 5 (multiple sessions; several transcripts lost to
+host instability — work preserved via incremental commits) · **Record
+written by:** planner, 2026-07-12, after completing the final acceptance
+leg directly. Detailed provenance/candidate record: `docs/ART.md`;
+narrative log: `docs/PROGRESS.md`.
+
+## Outcome at a glance
+
+| Scope item | Status |
+|---|---|
+| Placement engine (face-box → head-box → uniform transform) | **Done** — pure TS, unit-tested; face-skin channel extracted alongside hair in one inference (`segmentBoth`) |
+| Style overlay rendering + recolor + nudge + hints in Preview | **Done** — overlay recolors through the existing Lab engine (alpha-as-confidence); "no hair"/"no face"/"style shorter than hair" hints release-visible |
+| Overlay art | **3 of 6 styles shipped with real donor-hair cutouts** (pixie-crop, curly-shag, long-beach-waves); classic-bob / buzz-cut / classic-lob ship as "Art coming soon" |
+| Art technique | Iteration 5's self-authored SVG art REJECTED on planner review (blobs over the face); replaced in 5R by donor-hair extraction: CC0/PD portraits → on-device segmentation → feathered-alpha cutouts, anchored by the donor's own detected face box |
+| Quality gates | Occlusion gate evolved across rounds: flat <0.20 → inner-face <0.15 + whole-face <0.5 backstop + face-box plausibility (width cap recalibrated 0.60→0.70 for close-crops). Known blind spot recorded: gate measures covered AREA, not placement salience (classic-lob false negative → human review stays mandatory) |
+| Notable rejections | buzz-cut round-1 donor was a named U.S. military officer''s official portrait — pulled for personality rights (planner-endorsed); classic-lob passed the machine gate but rejected on visual review |
+| Verification | 232/232 unit tests, tsc clean, eslint clean; dev flows 04/05/06 3/3 (dev client); release build: **4/4 `flows/` acceptance PASS** (57 s) |
+| Build | `347e14ca` (preview, commit `e31751a`, app-identical to HEAD) — installed on the user''s phone. **EAS Android quota now exhausted until 2026-08-01**; this is the final build of the month |
+
+## Process notes
+
+- One executor session wedged on stacked Maestro daemons + an adb server
+  deadlock (recovered by killing java/adb and restarting Metro); several
+  sessions lost transcripts entirely. The loop survived because every
+  session committed incrementally and recorded decisions in ART.md /
+  HANDOFF.md — continuing that discipline is mandatory.
+- The planner directly performed: the classic-lob un-ship commit
+  (executor-authored tree, verified 232/232), the EAS build submit, the
+  approved APK install, and the final 4/4 acceptance run.
+
+## Gate for user acceptance
+
+On the installed build: pick/take a photo, choose Pixie Crop /
+Curly Shag / Long Beach Waves, judge placement on a real (bald) head,
+nudge controls, recolor-on-overlay quality, and the "Art coming soon"
+presentation of the three gapped styles.
