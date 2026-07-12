@@ -1,40 +1,70 @@
-# HANDOFF — next iteration (pending user try-on after 5R)
+# HANDOFF — Iteration 6 (M-Style: palette, light/dark theming)
 
-**Author:** Fable 5 (planner) · **Status: BLOCKED — awaiting user verdict on preview build `347e14ca`**
+**Author:** Fable 5 (planner) · **Status: READY**
 
-## Gate
+## Scope
 
-Iteration 5R is planner-accepted: 3 of 6 styles ship with real donor-hair
-overlays (pixie-crop, curly-shag, long-beach-waves), placement is driven
-by the face-skin channel (works on bald heads by design), overlays
-recolor through the Lab engine, and honest hints cover the no-hair /
-no-face / gapped-style cases. Build `347e14ca` is installed on the
-user's phone. The user's try-on verdict shapes what's next:
+User-supplied palette, applied app-wide with light and dark themes
+driven by the system preference (`useColorScheme()` from react-native —
+no new deps, no in-app toggle; a settings screen is a future iteration).
+NO EAS builds, NO Maestro/e2e this iteration. JS-only.
 
-- **Placement/scale wrong on the user's own head** → remediation on the
-  placement engine first (the bundled test portrait is a young woman
-  with long hair; a bald male head is the primary real case and may
-  expose head-box expansion assumptions).
-- **Art looks good, wants more styles** → August donor round (EAS quota
-  gone until 2026-08-01, but donor vetting/extraction is dev-client
-  work and can proceed anytime; only the release build waits).
-- **Good enough, move on** → M5 (live camera) — needs a NEW dev-client
-  build (native deps: vision-camera, worklets, gesture-handler) which
-  also waits on the August quota. Interim JS-only polish candidates:
-  camera-capture UX (user's standing complaint), per-row occlusion gate,
-  uniform-scale nudge improvements, style-card thumbnails in Search.
+## Palette and role assignments (planner-decided; do not improvise)
 
-## Hard constraints for whatever comes next
+Base palette: Mauve `#D9BBF9`, Dusty Grape `#4E5283`, Lilac Ash
+`#AA9FB1`, Lavender Purple `#7871AA`, Vintage Lavender `#7F6A93`.
 
-- **EAS Android build quota exhausted until 2026-08-01.** No release
-  builds, no new dev clients this month. Dev client `32841af6` (JS/asset
-  iteration) and installed preview `347e14ca` are what exists.
-- Loop protocol per docs/PROGRESS.md; executor never edits HANDOFF /
-  PROGRESS / REMEDIATION / .claude/. Incremental commits are mandatory
-  (they are what has survived repeated session losses).
-- Automation never opens/browses the phone photo library. Donor
-  downloads and APK installs always go through main-session approval.
-- Planner visual review is a mandatory stage for any art change — the
-  occlusion gate measures area, not salience (see ART.md).
-- D1–D7; no hand-written native code without STOP-and-report; no push,
-  analytics, or runtime network calls.
+Derived neutrals (planner-specified): light background `#FCFAFE`,
+light surface `#FFFFFF`, light body text `#2B2A3E`; dark background
+`#1C1B2E`, dark surface `#262544`, dark body text `#ECE8F4`.
+Semantic error stays `#B00020` (light) / `#FF6B81` (dark). The amber
+"style shorter than your hair" hint becomes Vintage Lavender in both
+themes (it's informational, not a warning).
+
+| Role | Light | Dark |
+|---|---|---|
+| Screen background | #FCFAFE | #1C1B2E |
+| Card/sheet/surface | #FFFFFF | #262544 |
+| Primary button bg / active tab / title accent | #4E5283 (text #FFFFFF) | #7871AA (text #FFFFFF) |
+| Secondary accent (links, selected chip border, focus) | #7871AA | #D9BBF9 |
+| Selection fill (selected chip/intensity bg) | #D9BBF9 (text #4E5283) | #4E5283 (text #ECE8F4) |
+| Muted text, placeholders, borders, disabled | #AA9FB1 | #AA9FB1 |
+| Body text | #2B2A3E | #ECE8F4 |
+| Informational hints ("Art coming soon", style-length note) | #7F6A93 | #AA9FB1→#7F6A93 blend: use #9B8FAE |
+| Badge overlay on photo | keep rgba(0,0,0,0.55), text #FFF | same |
+| Error text | #B00020 | #FF6B81 |
+
+## Work order
+
+1. `src/ui/theme.ts`: typed `Theme` object (semantic token names, not
+   color names), `lightTheme`/`darkTheme` constants, `useTheme()` hook
+   wrapping `useColorScheme()`. Unit-test that both themes cover every
+   token and that the hook falls back to light when scheme is null.
+2. Refactor ALL hardcoded colors in `src/ui/*` (App tab bar included)
+   onto `useTheme()` tokens. StyleSheets that need theme values move to
+   theme-parameterized factories or inline token usage — keep the
+   pattern consistent across files, minimal diff otherwise. The photo
+   canvas, swatch colors (they represent real hair dyes), and evidence
+   overlays are CONTENT, not chrome — do not theme them.
+3. StatusBar + SafeArea backgrounds must follow the theme (expo-status-bar
+   `style="auto"` or explicit per scheme).
+4. App icon: verify `app.json` points at the user's new
+   `assets/icon.png` (and note the android adaptiveIcon entries still
+   reference the old template art — update foreground/background config
+   only if the single PNG can serve; otherwise document what's needed).
+   Effect requires a future native build (August) — say so in SUMMARY.
+5. Verification (no e2e): jest + tsc + eslint green; then dev-client
+   visual evidence for planner review — screenshots of Search and
+   Preview (with a style applied) in BOTH themes (toggle via
+   `adb shell cmd uimode night yes|no`), committed as
+   `docs/evidence/iter6-{light,dark}-{search,preview}.png`.
+6. SUMMARY.md "Iteration 6" section. Commit to `main` in increments
+   ("Iteration 6:" prefix). The USER pushes to remote — never push.
+
+## Constraints
+
+- No new dependencies. No EAS actions of any kind. No e2e runs.
+- Never edit HANDOFF / PROGRESS / REMEDIATION / .claude/.
+- Photo-library privacy rule stands (screenshots use the bundled
+  portrait via the dev diagnostic).
+- Keep diffs tight; this is a styling pass, not a refactor of logic.

@@ -356,3 +356,26 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
 - Gate: user try-on of the three styles on their own head decides
   whether M6 polish continues (more donors in August, per-row occlusion
   gate idea, capture UX) or M5 (live camera) proceeds next.
+
+### User try-on — PASSED (2026-07-12) — M6 MVP accepted; styling milestone inserted
+
+- User tested on Android AND iOS (user ran an iOS EAS build themselves;
+  Android quota exhaustion doesn't apply to the iOS queue): "all hair
+  styles overlay well, colorize and look pretty good."
+- **User style notes — DOCUMENT ONLY, no action this iteration:**
+  - long-beach-waves: "may be too dynamic for use" — research a calmer
+    replacement donor, but RESERVE the current asset in case no suitable
+    candidate exists.
+  - pixie-crop: "not forward-facing enough for use" — jettison-candidate
+    unless no replacement donor exists; 3D generation deemed too complex.
+  - A future full iteration should focus solely on filling out the hair
+    catalog (more donors, August build for release).
+- **Known gaps carried:** classic-bob / buzz-cut / classic-lob art;
+  camera-capture UX; per-row occlusion gate idea; new app icon
+  (assets/icon.png, user-supplied 2026-07-12) requires a native build to
+  take effect — wire/verify config now, visible after the next build.
+- **Roadmap insertion (user decision): a styling milestone (M-Style)
+  runs NEXT, before catalog-fill and M5** — user-supplied 5-color
+  palette, light + dark themes from system preference (no in-app
+  toggle yet; settings screen deferred). No EAS builds, no e2e this
+  iteration (iOS Maestro support unverified; quota gone anyway).
