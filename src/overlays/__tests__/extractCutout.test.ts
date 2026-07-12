@@ -1,4 +1,4 @@
-import { blurMask, computeCutout, sampleMaskBilinear } from '../extractCutout';
+import { blurMask, computeCutout, keepLargestRegion, sampleMaskBilinear } from '../extractCutout';
 import type { HairMask } from '../../segmentation/types';
 
 function maskOf(width: number, height: number, fill = 0): HairMask {
@@ -48,6 +48,40 @@ describe('blurMask', () => {
     const mask = maskOf(6, 3, 0.75);
     const out = blurMask(mask, 2);
     for (const v of out.data) expect(v).toBeCloseTo(0.75, 6);
+  });
+});
+
+describe('keepLargestRegion', () => {
+  it('keeps the largest connected blob and zeroes the rest', () => {
+    const mask = maskOf(10, 10);
+    setRect(mask, 1, 1, 2, 2); // 4 px island
+    setRect(mask, 5, 5, 8, 8); // 16 px main region
+    const out = keepLargestRegion(mask, 0.5);
+    expect(out.data[1 * 10 + 1]).toBe(0); // island removed
+    expect(out.data[6 * 10 + 6]).toBe(1); // main region kept, values intact
+  });
+
+  it('returns an all-zero mask when nothing exceeds the threshold', () => {
+    const mask = maskOf(6, 6, 0.2);
+    const out = keepLargestRegion(mask, 0.5);
+    expect(Math.max(...out.data)).toBe(0);
+  });
+
+  it('cutout drops a stray island entirely (end to end)', () => {
+    const W = 40;
+    const H = 40;
+    const hair = maskOf(W, H);
+    setRect(hair, 8, 4, 31, 11); // main hair band
+    setRect(hair, 2, 34, 3, 35); // stray 2x2 island far below
+    const face = maskOf(W, H);
+    setRect(face, 12, 12, 27, 27);
+    const cut = computeCutout(donorPixels(W, H), W, H, hair, face, {
+      featherRadius: 0,
+      marginFraction: 0,
+    })!;
+    // Crop box must ignore the island: rows 4..27 only (height 24), so the
+    // island rows (34..35) are outside the cutout entirely.
+    expect(cut.height).toBe(24);
   });
 });
 

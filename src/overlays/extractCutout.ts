@@ -76,6 +76,61 @@ const DEFAULT_OPTIONS: Required<CutoutOptions> = {
 };
 
 /**
+ * Zeroes every mask cell that is not part of the largest 4-connected
+ * region above `threshold`. Kills stray low-confidence islands (eyebrow
+ * wisps, background noise, clothing misreads) that would otherwise ship
+ * as faint floating blobs in the cutout. Same flood-fill approach as
+ * `computeMaskBoundingBox`, but returning the filtered mask instead of a
+ * box. Returns an all-zero mask when nothing exceeds the threshold.
+ */
+export function keepLargestRegion(mask: HairMask, threshold: number): HairMask {
+  const { width, height, data } = mask;
+  const visited = new Int32Array(width * height); // 0 = unvisited, else region id
+  let bestRegion = 0;
+  let bestSize = -1;
+  let nextRegion = 0;
+  const stack: number[] = [];
+
+  for (let start = 0; start < width * height; start++) {
+    if (visited[start] !== 0 || data[start] <= threshold) continue;
+    nextRegion++;
+    let size = 0;
+    stack.length = 0;
+    stack.push(start);
+    visited[start] = nextRegion;
+    while (stack.length > 0) {
+      const idx = stack.pop() as number;
+      const x = idx % width;
+      size++;
+      const neighbors = [
+        x > 0 ? idx - 1 : -1,
+        x < width - 1 ? idx + 1 : -1,
+        idx - width,
+        idx + width,
+      ];
+      for (const n of neighbors) {
+        if (n >= 0 && n < width * height && visited[n] === 0 && data[n] > threshold) {
+          visited[n] = nextRegion;
+          stack.push(n);
+        }
+      }
+    }
+    if (size > bestSize) {
+      bestSize = size;
+      bestRegion = nextRegion;
+    }
+  }
+
+  const out = new Float32Array(width * height);
+  if (bestSize > 0) {
+    for (let i = 0; i < width * height; i++) {
+      if (visited[i] === bestRegion) out[i] = data[i];
+    }
+  }
+  return { width, height, data: out };
+}
+
+/**
  * Separable box blur on a mask, radius in whole pixels. Edge pixels use a
  * shrunken window (no wrap, no zero-padding bias). Radius 0 returns a
  * copy. Two passes (horizontal then vertical) of a box kernel - smooth
@@ -150,7 +205,10 @@ export function computeCutout(
   const faceBoxDonor = computeMaskBoundingBox(faceMask, opts.faceThreshold);
   if (!faceBoxDonor) return null;
 
-  const feathered = blurMask(hairMask, opts.featherRadius);
+  // Keep only the main hair region (stray mask islands become floating
+  // blobs in the shipped cutout otherwise), then feather its edge.
+  const mainHair = keepLargestRegion(hairMask, opts.cropThreshold);
+  const feathered = blurMask(mainHair, opts.featherRadius);
 
   // Donor-resolution alpha channel.
   const alpha = new Float32Array(donorWidth * donorHeight);
