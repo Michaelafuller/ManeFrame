@@ -11,7 +11,7 @@
  * Pure functions, no React imports.
  */
 
-import type { HairMask, HairSegmenter } from './types';
+import type { DualMaskSegmenter, FaceMask, HairMask, HairSegmenter } from './types';
 
 /** Mask never exceeds this on its long side (preserves aspect, may be smaller). */
 const MAX_MASK_DIMENSION = 256;
@@ -43,6 +43,27 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
   if (edge0 === edge1) return x < edge0 ? 0 : 1;
   const t = clamp01((x - edge0) / (edge1 - edge0));
   return t * t * (3 - 2 * t);
+}
+
+/**
+ * Face-skin mask value at one pixel: 1 inside the same face ellipse used
+ * above to cut a hole out of the hair-cap mask, smoothly falling to 0
+ * outside it. This is the mock stand-in for the real segmenter's
+ * face-skin channel (Iteration 5 / M6's placement engine input) — it
+ * deliberately reuses the exact same ellipse geometry as the hair-cap
+ * cutout above, so the mock's "face" and "hair" masks are geometrically
+ * consistent with each other the same way the real model's channels are.
+ */
+function faceMaskValueAt(x: number, y: number, width: number, height: number): number {
+  const faceCx = FACE_CENTER_X_FRAC * width;
+  const faceCy = FACE_CENTER_Y_FRAC * height;
+  const faceRx = FACE_RADIUS_X_FRAC * width;
+  const faceRy = FACE_RADIUS_Y_FRAC * height;
+  const faceBand = FACE_EDGE_BAND_FRAC * width;
+  const faceBandFrac = faceBand / ((faceRx + faceRy) / 2);
+
+  const faceR = ellipseRadius(x, y, faceCx, faceCy, faceRx, faceRy);
+  return clamp01(1 - smoothstep(1 - faceBandFrac, 1 + faceBandFrac, faceR));
 }
 
 /**
@@ -110,7 +131,7 @@ function mix(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-export class MockHairSegmenter implements HairSegmenter {
+export class MockHairSegmenter implements HairSegmenter, DualMaskSegmenter {
   readonly name = 'mock-hair-cap';
 
   segment(
@@ -128,5 +149,26 @@ export class MockHairSegmenter implements HairSegmenter {
     }
 
     return Promise.resolve({ width, height, data });
+  }
+
+  /**
+   * Same hair mask as `segment()`, plus a face-skin mask from the same
+   * ellipse geometry (see `faceMaskValueAt`) — the mock stand-in for the
+   * real segmenter's `segmentBoth`, used by the M6 placement engine.
+   */
+  async segmentBoth(
+    imageWidth: number,
+    imageHeight: number,
+    pixels: Uint8Array | null
+  ): Promise<{ hair: HairMask; face: FaceMask }> {
+    const hair = await this.segment(imageWidth, imageHeight, pixels);
+    const { width, height } = hair;
+    const faceData = new Float32Array(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        faceData[y * width + x] = faceMaskValueAt(x + 0.5, y + 0.5, width, height);
+      }
+    }
+    return { hair, face: { width, height, data: faceData } };
   }
 }

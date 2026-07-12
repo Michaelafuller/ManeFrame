@@ -96,3 +96,50 @@ describe('MockHairSegmenter', () => {
     expect(Array.from(withPixels.data)).toEqual(Array.from(withoutPixels.data));
   });
 });
+
+describe('MockHairSegmenter.segmentBoth (face mask, added Iteration 5)', () => {
+  const segmenter = new MockHairSegmenter();
+
+  it('returns a hair mask identical to segment()', async () => {
+    const { hair } = await segmenter.segmentBoth(300, 400, null);
+    const plain = await segmenter.segment(300, 400, null);
+    expect(hair.width).toBe(plain.width);
+    expect(hair.height).toBe(plain.height);
+    expect(Array.from(hair.data)).toEqual(Array.from(plain.data));
+  });
+
+  it('face mask is same dimensions as hair mask', async () => {
+    const { hair, face } = await segmenter.segmentBoth(300, 400, null);
+    expect(face.width).toBe(hair.width);
+    expect(face.height).toBe(hair.height);
+    expect(face.data.length).toBe(hair.data.length);
+  });
+
+  it('face mask center is near 1 (opposite of the hair mask, which is attenuated there)', async () => {
+    const { face } = await segmenter.segmentBoth(300, 400, null);
+    const x = Math.round(0.5 * face.width);
+    const y = Math.round(0.48 * face.height);
+    expect(face.data[y * face.width + x]).toBeGreaterThan(0.9);
+  });
+
+  it('face mask corners are approximately 0', async () => {
+    const { face } = await segmenter.segmentBoth(300, 400, null);
+    const corners = [
+      [0, 0],
+      [face.width - 1, 0],
+      [0, face.height - 1],
+      [face.width - 1, face.height - 1],
+    ];
+    for (const [x, y] of corners) {
+      expect(face.data[y * face.width + x]).toBeLessThan(0.05);
+    }
+  });
+
+  it('all face mask values are within 0..1', async () => {
+    const { face } = await segmenter.segmentBoth(300, 400, null);
+    for (let i = 0; i < face.data.length; i++) {
+      expect(face.data[i]).toBeGreaterThanOrEqual(0);
+      expect(face.data[i]).toBeLessThanOrEqual(1);
+    }
+  });
+});

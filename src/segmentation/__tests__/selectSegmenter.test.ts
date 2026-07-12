@@ -1,5 +1,5 @@
-import { segmentWithFallback } from '../selectSegmenter';
-import type { HairMask, HairSegmenter } from '../types';
+import { segmentWithFallback, segmentBothWithFallback } from '../selectSegmenter';
+import type { DualMaskSegmenter, HairMask, HairSegmenter } from '../types';
 
 function makeMask(tag: number): HairMask {
   return { width: 1, height: 1, data: new Float32Array([tag]) };
@@ -85,5 +85,59 @@ describe('segmentWithFallback', () => {
     await segmentWithFallback(primary, fallback, 42, 24, pixels);
 
     expect(seenArgs).toEqual([42, 24, pixels]);
+  });
+});
+
+class StubDualSegmenter implements DualMaskSegmenter {
+  private readonly hairTag: number;
+  private readonly faceTag: number;
+  private readonly failWith: Error | null;
+
+  constructor(options: { hairTag?: number; faceTag?: number; failWith?: Error } = {}) {
+    this.hairTag = options.hairTag ?? 0;
+    this.faceTag = options.faceTag ?? 0;
+    this.failWith = options.failWith ?? null;
+  }
+
+  segmentBoth(): Promise<{ hair: HairMask; face: HairMask }> {
+    if (this.failWith) {
+      return Promise.reject(this.failWith);
+    }
+    return Promise.resolve({ hair: makeMask(this.hairTag), face: makeMask(this.faceTag) });
+  }
+}
+
+describe('segmentBothWithFallback', () => {
+  it('returns the primary result and usedFallback=false when primary succeeds', async () => {
+    const primary = new StubDualSegmenter({ hairTag: 1, faceTag: 11 });
+    const fallback = new StubDualSegmenter({ hairTag: 2, faceTag: 22 });
+
+    const result = await segmentBothWithFallback(primary, fallback, 10, 10, new Uint8Array(4));
+
+    expect(result.usedFallback).toBe(false);
+    expect(result.hair.data[0]).toBe(1);
+    expect(result.face.data[0]).toBe(11);
+    expect(result.error).toBeUndefined();
+  });
+
+  it('falls back to the fallback segmenter (both masks) when primary throws', async () => {
+    const primary = new StubDualSegmenter({ failWith: new Error('model load failed') });
+    const fallback = new StubDualSegmenter({ hairTag: 2, faceTag: 22 });
+
+    const result = await segmentBothWithFallback(primary, fallback, 10, 10, new Uint8Array(4));
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.hair.data[0]).toBe(2);
+    expect(result.face.data[0]).toBe(22);
+    expect(result.error).toBe('model load failed');
+  });
+
+  it('propagates if both primary and fallback fail', async () => {
+    const primary = new StubDualSegmenter({ failWith: new Error('primary broke') });
+    const fallback = new StubDualSegmenter({ failWith: new Error('fallback broke too') });
+
+    await expect(
+      segmentBothWithFallback(primary, fallback, 10, 10, new Uint8Array(4))
+    ).rejects.toThrow('fallback broke too');
   });
 });

@@ -27,7 +27,7 @@ import { loadTensorflowModel, type TfliteModel } from 'react-native-fast-tflite'
 
 import hairSegmenterModelAsset from '../../assets/models/selfie_multiclass_256x256.tflite';
 import { buildSegmenterInputTensor, TFLITE_INPUT_SIZE, tensorToHairMask } from './tensor';
-import type { HairMask, HairSegmenter } from './types';
+import type { DualMaskSegmenter, FaceMask, HairMask, HairSegmenter } from './types';
 
 /**
  * Hardcoded for `selfie_multiclass_256x256.tflite` specifically, per the
@@ -40,6 +40,13 @@ import type { HairMask, HairSegmenter } from './types';
 const MODEL_OUTPUTS_ARE_PROBABILITIES = false;
 /** MediaPipe's documented category order for this model: index 1 is "hair". */
 const MODEL_HAIR_CHANNEL = 1;
+/**
+ * MediaPipe's documented category order for this model
+ * (`background, hair, body-skin, face-skin, clothes, others`): index 3 is
+ * "face-skin" — used by the Iteration 5 / M6 placement engine to locate
+ * the wearer's head, not for hair recoloring.
+ */
+const MODEL_FACE_CHANNEL = 3;
 
 /** Thrown for any model load or inference failure. Never lets the UI crash. */
 export class TfliteSegmentationError extends Error {
@@ -136,14 +143,22 @@ function statsOf(
   return { min, max, mean: n > 0 ? sum / n : NaN, n };
 }
 
-export class TfliteHairSegmenter implements HairSegmenter {
+export class TfliteHairSegmenter implements HairSegmenter, DualMaskSegmenter {
   readonly name = 'tflite-hair-segmenter';
 
-  async segment(
+  /**
+   * Runs inference once and extracts BOTH the hair mask and the face-skin
+   * mask from the same output tensor (added for Iteration 5 / M6's
+   * placement engine — no extra inference pass needed, since both channels
+   * come from the same [1,256,256,6] output). `segment()` below is kept
+   * for backward compatibility with every existing `HairSegmenter` call
+   * site and just returns `.hair` from this.
+   */
+  async segmentBoth(
     imageWidth: number,
     imageHeight: number,
     pixels: Uint8Array | null
-  ): Promise<HairMask> {
+  ): Promise<{ hair: HairMask; face: FaceMask }> {
     if (!pixels) {
       throw new TfliteSegmentationError(
         'TfliteHairSegmenter requires decoded pixel data (got null).'
@@ -257,7 +272,7 @@ export class TfliteHairSegmenter implements HairSegmenter {
       );
     }
 
-    const mask = tensorToHairMask(
+    const hair = tensorToHairMask(
       outputData,
       outWidth,
       outHeight,
@@ -265,20 +280,42 @@ export class TfliteHairSegmenter implements HairSegmenter {
       MODEL_HAIR_CHANNEL,
       MODEL_OUTPUTS_ARE_PROBABILITIES
     );
+    const face = tensorToHairMask(
+      outputData,
+      outWidth,
+      outHeight,
+      outChannels,
+      MODEL_FACE_CHANNEL,
+      MODEL_OUTPUTS_ARE_PROBABILITIES
+    );
 
     if (__DEV__) {
-      const s = statsOf(mask.data);
+      const s = statsOf(hair.data);
       let above = 0;
-      for (let i = 0; i < mask.data.length; i++) {
-        if (mask.data[i] > 0.5) above++;
+      for (let i = 0; i < hair.data.length; i++) {
+        if (hair.data[i] > 0.5) above++;
       }
       console.log(
         `[tflite][diag] final mask stats: min=${s.min.toFixed(4)} max=${s.max.toFixed(4)} ` +
-          `mean=${s.mean.toFixed(4)} fraction>0.5=${(above / mask.data.length).toFixed(4)}`
+          `mean=${s.mean.toFixed(4)} fraction>0.5=${(above / hair.data.length).toFixed(4)}`
       );
     }
 
-    return mask;
+    return { hair, face };
+  }
+
+  /**
+   * Backward-compatible `HairSegmenter` entry point: every existing call
+   * site (recolor pipeline, fallback selection) only needs the hair mask.
+   * Delegates to `segmentBoth` (single inference pass either way).
+   */
+  async segment(
+    imageWidth: number,
+    imageHeight: number,
+    pixels: Uint8Array | null
+  ): Promise<HairMask> {
+    const { hair } = await this.segmentBoth(imageWidth, imageHeight, pixels);
+    return hair;
   }
 }
 
