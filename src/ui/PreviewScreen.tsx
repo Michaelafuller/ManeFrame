@@ -350,9 +350,10 @@ export default function PreviewScreen({
   // Dev/E2E-only machine-checkable stat (docs/HANDOFF.md Iteration 4R-6):
   // fraction of mask pixels with confidence > 0.5, surfaced on-screen so
   // Maestro can assert a plausible hair-sized range instead of relying on
-  // screenshot eyeballing. Never rendered in a release build.
+  // screenshot eyeballing. Never rendered in a release build (and the
+  // __DEV__ guard here also skips the O(mask) pass entirely there).
   const hairPixelFraction = useMemo(() => {
-    if (!mask) return null;
+    if (!__DEV__ || !mask) return null;
     let above = 0;
     for (let i = 0; i < mask.data.length; i++) {
       if (mask.data[i] > 0.5) above++;
