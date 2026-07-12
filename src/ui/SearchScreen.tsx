@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   FlatList,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { loadColors, loadHairstyles } from '../catalog';
 import type { Hairstyle, HairColor } from '../catalog/types';
+import { hasOverlayArt } from '../overlays/registry';
 import { parseQuery } from '../search/parser';
 import { searchHairstyles, searchColors } from '../search/scorer';
 import { ColorSwatch } from './ColorSwatch';
@@ -23,14 +25,30 @@ function HairstyleResult({
   style,
   colors,
   onSelectColor,
+  onSelectStyle,
 }: {
   style: Hairstyle;
   colors: HairColor[];
   onSelectColor?: (color: HairColor) => void;
+  onSelectStyle?: (style: Hairstyle) => void;
 }) {
+  const artBearing = hasOverlayArt(style.id);
   return (
     <View style={styles.resultCard}>
-      <Text style={styles.resultName}>{style.name}</Text>
+      <View style={styles.resultHeaderRow}>
+        <Text style={styles.resultName}>{style.name}</Text>
+        {artBearing ? (
+          <Pressable
+            style={styles.tryOnButton}
+            onPress={() => onSelectStyle?.(style)}
+            testID={`try-on-${style.id}`}
+          >
+            <Text style={styles.tryOnButtonLabel}>Try on</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.comingSoonBadge}>Art coming soon</Text>
+        )}
+      </View>
       <Text style={styles.resultTags}>{matchedTags(style).join(' · ')}</Text>
       {colors.length > 0 && (
         <ScrollView
@@ -49,8 +67,10 @@ function HairstyleResult({
 
 export default function SearchScreen({
   onSelectColor,
+  onSelectStyle,
 }: {
   onSelectColor?: (color: HairColor) => void;
+  onSelectStyle?: (style: Hairstyle) => void;
 } = {}) {
   const [query, setQuery] = useState('');
   const allColors = useMemo(() => loadColors(), []);
@@ -93,6 +113,7 @@ export default function SearchScreen({
               style={item.style}
               colors={colorResults}
               onSelectColor={onSelectColor}
+              onSelectStyle={onSelectStyle}
             />
           )}
           ListEmptyComponent={
@@ -144,10 +165,37 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: '#fdfdfd',
   },
+  resultHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   resultName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#222',
+  },
+  tryOnButton: {
+    backgroundColor: '#222',
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  tryOnButtonLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  comingSoonBadge: {
+    fontSize: 11,
+    color: '#8a6d00',
+    backgroundColor: '#fff8e1',
+    borderWidth: 1,
+    borderColor: '#e6d18a',
+    borderRadius: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    overflow: 'hidden',
   },
   resultTags: {
     fontSize: 12,

@@ -21,14 +21,23 @@ import {
   type SkImage,
 } from '@shopify/react-native-skia';
 
-import { loadColors } from '../catalog';
-import type { HairColor } from '../catalog/types';
+import { loadColors, loadHairstyles } from '../catalog';
+import type { HairColor, Hairstyle } from '../catalog/types';
 import type { RecolorParams } from '../color/recolor';
 import { recolorImageChunked } from '../color/recolorImage';
+import {
+  computeHeadBox,
+  computeMaskBoundingBox,
+  computePlacementFromFaceMask,
+} from '../placement/headBox';
+import type { AffineTransform } from '../placement/types';
+import { getOverlayAsset, hasOverlayArt } from '../overlays/registry';
+import { overlayPixelsToSkImage, rasterizeOverlaySvg } from '../overlays/rasterize';
+import { recolorOverlayImage } from '../overlays/recolorOverlay';
 import { MockHairSegmenter } from '../segmentation/mock';
-import { segmentWithFallback } from '../segmentation/selectSegmenter';
+import { segmentBothWithFallback } from '../segmentation/selectSegmenter';
 import { TfliteHairSegmenter } from '../segmentation/tflite';
-import type { HairMask } from '../segmentation/types';
+import type { FaceMask, HairMask } from '../segmentation/types';
 import { ColorSwatch } from './ColorSwatch';
 
 /** Photos are downscaled to at most this many pixels on their long side. */
@@ -47,11 +56,37 @@ const MAX_PHOTO_DIMENSION = 768;
  */
 const bundledTestPortrait = require('../../assets/test/portrait.jpg');
 
+/**
+ * Dev/E2E-only diagnostic asset with deliberately NO face in frame (a
+ * generated app icon, not a photo of anyone) - lets automation exercise
+ * the "No face detected" hint deterministically without ever touching the
+ * device camera or photo library (Iteration 5 / M6; see docs/E2E.md).
+ */
+const bundledNoFaceTestImage = require('../../assets/splash-icon.png');
+
 const INTENSITY_PRESETS: { label: string; value: number }[] = [
   { label: 'Subtle 0.5', value: 0.5 },
   { label: 'Natural 0.8', value: 0.8 },
   { label: 'Bold 1.0', value: 1.0 },
 ];
+
+/** Manual nudge-control step sizes (Iteration 5 / M6 placement correction). */
+const NUDGE_MOVE_FRACTION = 0.02; // fraction of photo width/height per press
+const NUDGE_SCALE_STEP = 0.05;
+const NUDGE_SCALE_MIN = 0.5;
+const NUDGE_SCALE_MAX = 2;
+
+/** Below this hair-pixel fraction, "no hair detected" is treated as the normal case, not an error. */
+const NO_HAIR_FRACTION_THRESHOLD = 0.005;
+
+/**
+ * If the detected hair region's height (as a fraction of photo height)
+ * exceeds the placed head box's height by more than this multiplier, the
+ * selected style is meaningfully shorter than the wearer's real hair -
+ * some real hair will show past the overlay's edges (known limitation,
+ * see docs/HANDOFF.md / docs/SUMMARY.md).
+ */
+const HAIR_LONGER_THAN_STYLE_RATIO = 1.3;
 
 interface DecodedPhoto {
   skImage: SkImage;
@@ -59,6 +94,14 @@ interface DecodedPhoto {
   width: number;
   height: number;
 }
+
+interface NudgeState {
+  dx: number; // photo-pixel offset
+  dy: number; // photo-pixel offset
+  scale: number; // multiplier, applied around the placed rect's center
+}
+
+const DEFAULT_NUDGE: NudgeState = { dx: 0, dy: 0, scale: 1 };
 
 /** Decodes an image file into an SkImage plus its raw RGBA_8888 pixel bytes. */
 async function decodePhoto(uri: string): Promise<DecodedPhoto> {
@@ -98,26 +141,72 @@ function pixelsToSkImage(
   );
 }
 
+/** A style overlay's placed rectangle, in photo-pixel space (before display scaling). */
+interface PlacedRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function rectFromTransform(
+  transform: AffineTransform,
+  overlayWidth: number,
+  overlayHeight: number
+): PlacedRect {
+  return {
+    x: transform.translateX,
+    y: transform.translateY,
+    w: overlayWidth * transform.scaleX,
+    h: overlayHeight * transform.scaleY,
+  };
+}
+
+/** Applies a manual nudge (move + scale-around-center) to a placed rect. */
+function applyNudge(rect: PlacedRect, nudge: NudgeState): PlacedRect {
+  return {
+    x: rect.x + nudge.dx - (rect.w * (nudge.scale - 1)) / 2,
+    y: rect.y + nudge.dy - (rect.h * (nudge.scale - 1)) / 2,
+    w: rect.w * nudge.scale,
+    h: rect.h * nudge.scale,
+  };
+}
+
 export default function PreviewScreen({
   selectedColor,
+  selectedStyle,
 }: {
   selectedColor: HairColor | null;
+  selectedStyle?: Hairstyle | null;
 }) {
   const allColors = useMemo(() => loadColors(), []);
+  const allStyles = useMemo(() => loadHairstyles(), []);
+  const artBearingStyles = useMemo(
+    () => allStyles.filter((s) => hasOverlayArt(s.id)),
+    [allStyles]
+  );
   const tfliteSegmenter = useMemo(() => new TfliteHairSegmenter(), []);
   const mockSegmenter = useMemo(() => new MockHairSegmenter(), []);
 
   const [activeColor, setActiveColor] = useState<HairColor>(
     selectedColor ?? allColors[0]
   );
+  // Seeded once from selectedStyle, same pattern/rationale as activeColor
+  // below (App.tsx only ever mounts one screen at a time - see the note
+  // further down).
+  const [activeStyleId, setActiveStyleId] = useState<string | null>(
+    selectedStyle && hasOverlayArt(selectedStyle.id) ? selectedStyle.id : null
+  );
   const [intensity, setIntensity] = useState(0.8);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [photo, setPhoto] = useState<DecodedPhoto | null>(null);
   const [mask, setMask] = useState<HairMask | null>(null);
+  const [faceMask, setFaceMask] = useState<FaceMask | null>(null);
   const [recoloredImage, setRecoloredImage] = useState<SkImage | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nudge, setNudge] = useState<NudgeState>(DEFAULT_NUDGE);
   // Dev toggle: force the mock segmenter even when TFLite is available, to
   // compare the two side by side. Also flips true automatically whenever
   // TFLite construction/inference actually fails (see the segmentation
@@ -141,37 +230,62 @@ export default function PreviewScreen({
 
   const runIdRef = useRef(0);
 
-  // Note: `activeColor` is deliberately only seeded from `selectedColor` via
-  // the useState initializer above, not re-synced in an effect. App.tsx
-  // renders exactly one of {SearchScreen, PreviewScreen} at a time, so this
-  // component only (re)mounts - picking up whatever `selectedColor` App.tsx
-  // is holding at that moment - when the user switches into the Preview
-  // tab; there's no scenario where `selectedColor` changes while this
-  // instance is already mounted.
+  // Note: `activeColor`/`activeStyleId` are deliberately only seeded from
+  // `selectedColor`/`selectedStyle` via the useState initializer above, not
+  // re-synced in an effect. App.tsx renders exactly one of {SearchScreen,
+  // PreviewScreen} at a time, so this component only (re)mounts - picking
+  // up whatever App.tsx is holding at that moment - when the user switches
+  // into the Preview tab; there's no scenario where those props change
+  // while this instance is already mounted.
 
-  // Segment once per photo. Wrapped in an inner async function (the
-  // React-recommended pattern for async effects) so the state updates
-  // happen as part of the async data flow, not synchronously on every
-  // effect run.
+  // Reset manual placement nudges whenever the photo or the active style
+  // changes - a nudge tuned for one photo/style pairing rarely makes sense
+  // for another. Deliberately NOT a `useEffect` (which would call setState
+  // synchronously in the effect body and trigger an extra cascading
+  // render, flagged by `react-hooks/set-state-in-effect`): this is React's
+  // documented "adjusting state when a prop changes" pattern - detecting
+  // the change and calling setState directly during render, which React
+  // handles by re-rendering immediately before committing/painting.
+  const [nudgeResetKey, setNudgeResetKey] = useState<{
+    photo: DecodedPhoto | null;
+    styleId: string | null;
+  }>({ photo: null, styleId: null });
+  if (nudgeResetKey.photo !== photo || nudgeResetKey.styleId !== activeStyleId) {
+    setNudgeResetKey({ photo, styleId: activeStyleId });
+    setNudge(DEFAULT_NUDGE);
+  }
+
+  // Segment once per photo: both the hair mask (existing recolor pipeline)
+  // and the face-skin mask (Iteration 5 / M6 placement engine input), from
+  // a single underlying inference pass (`segmentBoth`/`segmentBothWithFallback`).
+  // Wrapped in an inner async function (the React-recommended pattern for
+  // async effects) so the state updates happen as part of the async data
+  // flow, not synchronously on every effect run.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!photo) {
         setMask(null);
+        setFaceMask(null);
         setUsingMock(false);
         setSegmentationError(null);
         return;
       }
       if (forceMock) {
-        const m = await mockSegmenter.segment(photo.width, photo.height, photo.pixels);
+        const { hair, face } = await mockSegmenter.segmentBoth(
+          photo.width,
+          photo.height,
+          photo.pixels
+        );
         if (!cancelled) {
-          setMask(m);
+          setMask(hair);
+          setFaceMask(face);
           setUsingMock(true);
           setSegmentationError(null);
         }
         return;
       }
-      const result = await segmentWithFallback(
+      const result = await segmentBothWithFallback(
         tfliteSegmenter,
         mockSegmenter,
         photo.width,
@@ -179,7 +293,8 @@ export default function PreviewScreen({
         photo.pixels
       );
       if (!cancelled) {
-        setMask(result.mask);
+        setMask(result.hair);
+        setFaceMask(result.face);
         setUsingMock(result.usedFallback);
         if (result.usedFallback && result.error) {
           // Always log the full chain (message + cause) so logcat has it
@@ -242,12 +357,119 @@ export default function PreviewScreen({
     })();
   }, [photo, mask, activeColor, intensity]);
 
+  const activeStyle = useMemo(
+    () => allStyles.find((s) => s.id === activeStyleId) ?? null,
+    [allStyles, activeStyleId]
+  );
+  const overlayAsset = useMemo(
+    () => (activeStyle ? getOverlayAsset(activeStyle.id) : null),
+    [activeStyle]
+  );
+
+  // Rasterize the selected style's SVG once per style change (Skia work -
+  // independent of color/intensity, which only recolor the same raster).
+  // `rasterizeOverlaySvg` is a synchronous, pure function of `overlayAsset`
+  // (no native async work, unlike photo decode/recolor), so this is a plain
+  // `useMemo`, not state+effect - cheaper and avoids an extra render.
+  const overlayRaster = useMemo(() => {
+    if (!overlayAsset) return null;
+    const raster = rasterizeOverlaySvg(overlayAsset.svg, overlayAsset.width, overlayAsset.height);
+    return raster ? { pixels: raster.pixels, width: raster.width, height: raster.height } : null;
+  }, [overlayAsset]);
+
+  // Recolor the rasterized overlay through the exact same Lab pipeline as
+  // hair recolor, using the overlay's own alpha as the confidence input.
+  // Genuinely async (recolorOverlayImage yields to the event loop), so
+  // this stays state+effect - every setState call lives inside the async
+  // IIFE (same convention as the segmentation/recolor effects above),
+  // never synchronously in the effect body itself.
+  const [overlayImage, setOverlayImage] = useState<SkImage | null>(null);
+  const overlayRunIdRef = useRef(0);
+
+  useEffect(() => {
+    const runId = ++overlayRunIdRef.current;
+    (async () => {
+      if (!overlayRaster) {
+        if (overlayRunIdRef.current === runId) setOverlayImage(null);
+        return;
+      }
+      const params: RecolorParams = { color: activeColor, intensity };
+      const recolored = await recolorOverlayImage(
+        overlayRaster.pixels,
+        overlayRaster.width,
+        overlayRaster.height,
+        params,
+        { isStale: () => overlayRunIdRef.current !== runId }
+      );
+      if (overlayRunIdRef.current !== runId || !recolored) return;
+      const built = overlayPixelsToSkImage(recolored, overlayRaster.width, overlayRaster.height);
+      if (overlayRunIdRef.current === runId) setOverlayImage(built);
+    })();
+  }, [overlayRaster, activeColor, intensity]);
+
+  // Placement engine: face mask -> face box -> head box -> overlay
+  // transform. `null` distinctly means "no face detected" only when a
+  // style is actually selected and a face mask exists to test against -
+  // otherwise there's simply nothing to place yet.
+  const placement = useMemo(() => {
+    if (!photo || !faceMask || !overlayAsset) return null;
+    return computePlacementFromFaceMask(
+      faceMask,
+      overlayAsset.headBox,
+      overlayAsset.width,
+      overlayAsset.height,
+      photo.width,
+      photo.height
+    );
+  }, [photo, faceMask, overlayAsset]);
+
+  const noFaceDetected = activeStyleId !== null && overlayAsset !== null && faceMask !== null && placement === null;
+
+  const placedRect = useMemo(() => {
+    if (!placement || !overlayAsset) return null;
+    return applyNudge(rectFromTransform(placement, overlayAsset.width, overlayAsset.height), nudge);
+  }, [placement, overlayAsset, nudge]);
+
+  // Known limitation (docs/HANDOFF.md): a style much shorter than the
+  // wearer's actual detected hair will leave real hair visible past the
+  // overlay's edges. Compares the detected hair region's height against
+  // the placed head box's height (both as fractions of photo height).
+  const styleShorterThanHairHint = useMemo(() => {
+    if (!activeStyleId || !mask || !faceMask) return false;
+    const hairBox = computeMaskBoundingBox(mask);
+    const faceBox = computeMaskBoundingBox(faceMask);
+    if (!hairBox || !faceBox) return false;
+    const headBox = computeHeadBox(faceBox);
+    return hairBox.h > headBox.h * HAIR_LONGER_THAN_STYLE_RATIO;
+  }, [activeStyleId, mask, faceMask]);
+
+  function nudgeMove(dxSign: number, dySign: number) {
+    if (!photo) return;
+    setNudge((n) => ({
+      ...n,
+      dx: n.dx + dxSign * photo.width * NUDGE_MOVE_FRACTION,
+      dy: n.dy + dySign * photo.height * NUDGE_MOVE_FRACTION,
+    }));
+  }
+
+  function nudgeScaleBy(sign: number) {
+    setNudge((n) => ({
+      ...n,
+      scale: Math.min(NUDGE_SCALE_MAX, Math.max(NUDGE_SCALE_MIN, n.scale + sign * NUDGE_SCALE_STEP)),
+    }));
+  }
+
+  function resetNudge() {
+    setNudge(DEFAULT_NUDGE);
+  }
+
   async function processPickedAsset(asset: ImagePicker.ImagePickerAsset) {
     try {
       setError(null);
       setPhoto(null);
       setRecoloredImage(null);
       setMask(null);
+      setFaceMask(null);
 
       const isLandscape = asset.width >= asset.height;
       const context = isLandscape
@@ -274,24 +496,22 @@ export default function PreviewScreen({
   }
 
   /**
-   * Dev/E2E-only: loads the bundled licensed test portrait
-   * (`assets/test/portrait.jpg`, see docs/E2E.md) through the exact same
-   * `processPickedAsset` path a real picked/captured photo takes. This is
-   * the only way automation (or a developer) can exercise real hair
-   * segmentation on an actual head of hair without ever browsing the
-   * device photo library - see the standing privacy rule in
-   * docs/PROGRESS.md. Never reachable in a release build's UI.
+   * Dev/E2E-only: loads a bundled asset through the exact same
+   * `processPickedAsset` path a real picked/captured photo takes - the
+   * only way automation (or a developer) can exercise real segmentation
+   * without ever browsing the device photo library - see the standing
+   * privacy rule in docs/PROGRESS.md. Never reachable in a release build.
    */
-  async function loadBundledTestPortrait() {
+  async function loadBundledAsset(moduleRef: number, label: string) {
     if (!__DEV__) return;
     setPickerVisible(false);
     try {
-      const asset = Asset.fromModule(bundledTestPortrait);
+      const asset = Asset.fromModule(moduleRef);
       if (!asset.localUri) {
         await asset.downloadAsync();
       }
       if (!asset.localUri || !asset.width || !asset.height) {
-        setError('Could not resolve the bundled test portrait asset.');
+        setError(`Could not resolve the bundled ${label} asset.`);
         return;
       }
       await processPickedAsset({
@@ -300,11 +520,12 @@ export default function PreviewScreen({
         height: asset.height,
       } as ImagePicker.ImagePickerAsset);
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : 'Could not load the bundled test portrait.'
-      );
+      setError(e instanceof Error ? e.message : `Could not load the bundled ${label}.`);
     }
   }
+
+  const loadBundledTestPortrait = () => loadBundledAsset(bundledTestPortrait, 'test portrait');
+  const loadBundledNoFaceImage = () => loadBundledAsset(bundledNoFaceTestImage, 'no-face test image');
 
   async function pickFromLibrary() {
     setPickerVisible(false);
@@ -347,19 +568,32 @@ export default function PreviewScreen({
       ? `${segmentationError.slice(0, 60)}…`
       : segmentationError;
 
-  // Dev/E2E-only machine-checkable stat (docs/HANDOFF.md Iteration 4R-6):
-  // fraction of mask pixels with confidence > 0.5, surfaced on-screen so
-  // Maestro can assert a plausible hair-sized range instead of relying on
-  // screenshot eyeballing. Never rendered in a release build (and the
-  // __DEV__ guard here also skips the O(mask) pass entirely there).
+  // Fraction of mask pixels with confidence > 0.5. Drives the release-
+  // visible "no hair detected" hint (Iteration 5 / M6), so this now
+  // computes unconditionally (previously __DEV__-only, back when it was
+  // purely a diagnostic - see docs/SUMMARY.md Iteration 4R-6). Cost is
+  // negligible: the mask is capped at 256px on its long side either way.
   const hairPixelFraction = useMemo(() => {
-    if (!__DEV__ || !mask) return null;
+    if (!mask) return null;
     let above = 0;
     for (let i = 0; i < mask.data.length; i++) {
       if (mask.data[i] > 0.5) above++;
     }
     return above / mask.data.length;
   }, [mask]);
+
+  const showNoHairHint =
+    activeStyleId === null &&
+    hairPixelFraction !== null &&
+    hairPixelFraction < NO_HAIR_FRACTION_THRESHOLD;
+
+  // Display-space scale: the canvas wrapper's `aspectRatio` style locks
+  // its box to exactly the photo's own aspect ratio, so once measured
+  // there's no letterboxing - a single uniform scale factor maps
+  // photo-pixel coordinates to on-screen dp coordinates for both the base
+  // photo layer and the overlay layer, keeping them pixel-aligned.
+  const displayScale =
+    photo && canvasLayout.width > 0 ? canvasLayout.width / photo.width : 0;
 
   const selectedColorIndex = allColors.findIndex((c) => c.id === activeColor.id);
   // Estimated per-swatch width (see ColorSwatch's `swatchContainer` style:
@@ -383,27 +617,37 @@ export default function PreviewScreen({
         )}
 
         {/*
-          Dev/E2E-only diagnostic entry point (docs/HANDOFF.md Iteration
-          4R-6): a plain tap, not a long-press on the "Pick a photo"
-          button - React Native's Pressable fires `onPress` on release
-          regardless of whether `onLongPress` already fired, so sharing
-          the picker button's gesture recognizer with a second action
-          silently races (verified empirically: the long-press variant of
-          this button always ended up just opening the "Choose from
-          Library / Take a Photo" picker modal, never running the
-          diagnostic). A dedicated button sidesteps that entirely. Never
-          rendered in a release build.
+          Dev/E2E-only diagnostic entry points (docs/HANDOFF.md Iteration
+          4R-6, extended Iteration 5): plain taps, not long-presses on the
+          "Pick a photo" button - React Native's Pressable fires `onPress`
+          on release regardless of whether `onLongPress` already fired, so
+          sharing the picker button's gesture recognizer with a second
+          action silently races (verified empirically in 4R-6: the
+          long-press variant always ended up just opening the picker
+          modal). Dedicated buttons sidestep that entirely. Never rendered
+          in a release build.
         */}
         {__DEV__ && !photo && (
-          <Pressable
-            style={styles.devTestPortraitButton}
-            onPress={loadBundledTestPortrait}
-            testID="load-test-portrait-button"
-          >
-            <Text style={styles.devTestPortraitButtonLabel}>
-              [dev] Load bundled test portrait
-            </Text>
-          </Pressable>
+          <>
+            <Pressable
+              style={styles.devTestPortraitButton}
+              onPress={loadBundledTestPortrait}
+              testID="load-test-portrait-button"
+            >
+              <Text style={styles.devTestPortraitButtonLabel}>
+                [dev] Load bundled test portrait
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.devTestPortraitButton}
+              onPress={loadBundledNoFaceImage}
+              testID="load-no-face-test-image-button"
+            >
+              <Text style={styles.devTestPortraitButtonLabel}>
+                [dev] Load bundled no-face test image
+              </Text>
+            </Pressable>
+          </>
         )}
 
         {photo && (
@@ -434,6 +678,16 @@ export default function PreviewScreen({
                     height={canvasLayout.height || photo.height}
                     fit="contain"
                   />
+                  {!showOriginal && overlayImage && placedRect && displayScale > 0 && (
+                    <SkiaImage
+                      image={overlayImage}
+                      x={placedRect.x * displayScale}
+                      y={placedRect.y * displayScale}
+                      width={placedRect.w * displayScale}
+                      height={placedRect.h * displayScale}
+                      fit="fill"
+                    />
+                  )}
                 </Canvas>
                 {isProcessing && (
                   <View style={styles.processingOverlay}>
@@ -460,10 +714,83 @@ export default function PreviewScreen({
                 {`hair px: ${(hairPixelFraction * 100).toFixed(1)}%`}
               </Text>
             )}
+            {__DEV__ && activeStyle && placedRect && (
+              <Text style={styles.hairStatText} testID="overlay-box-stat">
+                {`style: ${activeStyle.id} @ ${Math.round(placedRect.x)},${Math.round(
+                  placedRect.y
+                )},${Math.round(placedRect.w)},${Math.round(placedRect.h)}`}
+              </Text>
+            )}
+            {showNoHairHint && (
+              <Text style={styles.infoHint} testID="no-hair-hint">
+                No hair detected in this photo — pick a style to try one on.
+              </Text>
+            )}
+            {noFaceDetected && (
+              <Text style={styles.infoHint} testID="no-face-hint">
+                No face detected — try a front-facing photo.
+              </Text>
+            )}
+            {styleShorterThanHairHint && (
+              <Text style={styles.infoHint} testID="style-shorter-than-hair-hint">
+                Your hair looks longer than this style — some of your real
+                hair may show at the edges.
+              </Text>
+            )}
             <Text style={styles.hint}>
               Press and hold the photo to see the original. Long-press the
               badge in the corner to toggle mock ↔ tflite segmentation.
             </Text>
+
+            {activeStyleId !== null && placedRect && (
+              <View style={styles.nudgeRow}>
+                <Pressable
+                  style={styles.nudgeButton}
+                  onPress={() => nudgeMove(-1, 0)}
+                  testID="nudge-left"
+                >
+                  <Text style={styles.nudgeButtonLabel}>◀</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.nudgeButton}
+                  onPress={() => nudgeMove(1, 0)}
+                  testID="nudge-right"
+                >
+                  <Text style={styles.nudgeButtonLabel}>▶</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.nudgeButton}
+                  onPress={() => nudgeMove(0, -1)}
+                  testID="nudge-up"
+                >
+                  <Text style={styles.nudgeButtonLabel}>▲</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.nudgeButton}
+                  onPress={() => nudgeMove(0, 1)}
+                  testID="nudge-down"
+                >
+                  <Text style={styles.nudgeButtonLabel}>▼</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.nudgeButton}
+                  onPress={() => nudgeScaleBy(1)}
+                  testID="nudge-scale-up"
+                >
+                  <Text style={styles.nudgeButtonLabel}>+</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.nudgeButton}
+                  onPress={() => nudgeScaleBy(-1)}
+                  testID="nudge-scale-down"
+                >
+                  <Text style={styles.nudgeButtonLabel}>−</Text>
+                </Pressable>
+                <Pressable style={styles.nudgeButton} onPress={resetNudge} testID="nudge-reset">
+                  <Text style={styles.nudgeButtonLabel}>Reset</Text>
+                </Pressable>
+              </View>
+            )}
 
             <Pressable
               style={styles.secondaryButton}
@@ -475,23 +802,75 @@ export default function PreviewScreen({
               </Text>
             </Pressable>
 
-            {/* See the dev-only button above "Pick a photo" for why this
-                is a plain tap, not a long-press on an existing button. */}
+            {/* See the dev-only buttons above "Pick a photo" for why these
+                are plain taps, not long-presses on an existing button. */}
             {__DEV__ && (
-              <Pressable
-                style={styles.devTestPortraitButton}
-                onPress={loadBundledTestPortrait}
-                testID="load-test-portrait-button"
-              >
-                <Text style={styles.devTestPortraitButtonLabel}>
-                  [dev] Load bundled test portrait
-                </Text>
-              </Pressable>
+              <>
+                <Pressable
+                  style={styles.devTestPortraitButton}
+                  onPress={loadBundledTestPortrait}
+                  testID="load-test-portrait-button"
+                >
+                  <Text style={styles.devTestPortraitButtonLabel}>
+                    [dev] Load bundled test portrait
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.devTestPortraitButton}
+                  onPress={loadBundledNoFaceImage}
+                  testID="load-no-face-test-image-button"
+                >
+                  <Text style={styles.devTestPortraitButtonLabel}>
+                    [dev] Load bundled no-face test image
+                  </Text>
+                </Pressable>
+              </>
             )}
           </>
         )}
 
         {error && <Text style={styles.errorText}>{error}</Text>}
+
+        <Text style={styles.sectionLabel}>Style</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.styleRow}
+        >
+          <Pressable
+            style={[styles.styleChip, activeStyleId === null && styles.styleChipActive]}
+            onPress={() => setActiveStyleId(null)}
+            testID="style-chip-none"
+            accessibilityState={{ selected: activeStyleId === null }}
+          >
+            <Text
+              style={[
+                styles.styleChipLabel,
+                activeStyleId === null && styles.styleChipLabelActive,
+              ]}
+            >
+              None
+            </Text>
+          </Pressable>
+          {artBearingStyles.map((s) => (
+            <Pressable
+              key={s.id}
+              style={[styles.styleChip, activeStyleId === s.id && styles.styleChipActive]}
+              onPress={() => setActiveStyleId(s.id)}
+              testID={`style-chip-${s.id}`}
+              accessibilityState={{ selected: activeStyleId === s.id }}
+            >
+              <Text
+                style={[
+                  styles.styleChipLabel,
+                  activeStyleId === s.id && styles.styleChipLabelActive,
+                ]}
+              >
+                {s.name}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
 
         <Text style={styles.sectionLabel}>Color — {activeColor.displayName}</Text>
         <ScrollView
@@ -645,11 +1024,37 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
+  infoHint: {
+    fontSize: 12,
+    color: '#8a6d00',
+    textAlign: 'center',
+    marginBottom: 6,
+    paddingHorizontal: 8,
+  },
   hint: {
     fontSize: 12,
     color: '#888',
     textAlign: 'center',
     marginBottom: 12,
+  },
+  nudgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  nudgeButton: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  nudgeButtonLabel: {
+    fontSize: 14,
+    color: '#333',
   },
   secondaryButton: {
     borderWidth: 1,
@@ -689,6 +1094,28 @@ const styles = StyleSheet.create({
     color: '#555',
     marginBottom: 8,
     marginTop: 4,
+  },
+  styleRow: {
+    marginBottom: 16,
+  },
+  styleChip: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginRight: 8,
+  },
+  styleChipActive: {
+    backgroundColor: '#222',
+    borderColor: '#222',
+  },
+  styleChipLabel: {
+    fontSize: 13,
+    color: '#333',
+  },
+  styleChipLabelActive: {
+    color: '#fff',
   },
   swatchRow: {
     marginBottom: 16,

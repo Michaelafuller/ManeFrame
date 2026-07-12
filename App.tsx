@@ -5,13 +5,14 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import SearchScreen from './src/ui/SearchScreen';
 import PreviewScreen from './src/ui/PreviewScreen';
-import type { HairColor } from './src/catalog/types';
+import type { HairColor, Hairstyle } from './src/catalog/types';
 
 type Tab = 'search' | 'preview';
 
 function AppContent() {
   const [tab, setTab] = useState<Tab>('search');
   const [selectedColor, setSelectedColor] = useState<HairColor | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState<Hairstyle | null>(null);
   const insets = useSafeAreaInsets();
 
   function handleSelectColor(color: HairColor) {
@@ -19,13 +20,18 @@ function AppContent() {
     setTab('preview');
   }
 
+  function handleSelectStyle(style: Hairstyle) {
+    setSelectedStyle(style);
+    setTab('preview');
+  }
+
   return (
     <View style={styles.root}>
       <View style={styles.content}>
         {tab === 'search' ? (
-          <SearchScreen onSelectColor={handleSelectColor} />
+          <SearchScreen onSelectColor={handleSelectColor} onSelectStyle={handleSelectStyle} />
         ) : (
-          <PreviewScreen selectedColor={selectedColor} />
+          <PreviewScreen selectedColor={selectedColor} selectedStyle={selectedStyle} />
         )}
       </View>
       <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
