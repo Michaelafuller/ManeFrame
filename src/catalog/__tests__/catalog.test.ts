@@ -279,20 +279,24 @@ describe('hairstyle overlay art integrity (Iteration 5R / M6 remediation)', () =
     expect(catalogArtBearingIds).toEqual(registryIds);
   });
 
-  // Iteration 5R shipped a real donor-hair cutout for only 1 of the 6 MVP
-  // styles (pixie-crop). Every other candidate failed: the donor staged for
-  // buzz-cut turned out to be an official military portrait of a named,
-  // identifiable person (pulled before shipping - a personality-rights
-  // problem, not a licensing one), and every candidate tried for
-  // classic-bob/classic-lob/long-beach-waves/curly-shag failed the
-  // face-occlusion gate or had an unreliable face-box detection (see
-  // docs/ART.md for the full candidate record). The other 5 styles revert
-  // to "Art coming soon" (no assets.headBox) rather than ship the rejected
-  // Iteration 5 SVG placeholders or a disqualified donor.
-  it('has exactly 1 art-bearing style (Iteration 5R donor-hair MVP)', () => {
+  // Iteration 5R ships real donor-hair cutouts for 4 of the 6 MVP styles:
+  // pixie-crop (round 1) plus classic-lob / curly-shag / long-beach-waves
+  // (round 2's bounded search under the revised occlusion gate). The
+  // remaining 2 ship as "Art coming soon" gaps (no assets.headBox):
+  // buzz-cut's round-1 donor was an official military portrait of a named,
+  // identifiable person (pulled - a personality-rights problem, not a
+  // licensing one) with no anonymous CC0 replacement found in round 2, and
+  // no classic-bob candidate passed the face-occlusion/plausibility gate
+  // in either round (see docs/ART.md for the full candidate record).
+  it('has exactly 4 art-bearing styles (Iteration 5R donor-hair MVP, round 2)', () => {
     const catalogArtBearingIds = hairstyles.filter((s) => s.assets.headBox !== undefined);
-    expect(catalogArtBearingIds).toHaveLength(1);
-    expect(catalogArtBearingIds.map((s) => s.id).sort()).toEqual(['pixie-crop']);
+    expect(catalogArtBearingIds).toHaveLength(4);
+    expect(catalogArtBearingIds.map((s) => s.id).sort()).toEqual([
+      'classic-lob',
+      'curly-shag',
+      'long-beach-waves',
+      'pixie-crop',
+    ]);
   });
 
   it('every art-bearing style has a valid, in-range headBox', () => {

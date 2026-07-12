@@ -20,16 +20,17 @@
  * coordinates — semantically a face box, not a head box, for raster cutout
  * assets (see `computeUniformOverlayTransform` in `src/placement/headBox.ts`).
  *
- * Iteration 5R shipped only 1 of the 6 MVP styles. Every other candidate
- * (the geometry-passing donor originally staged as `buzz-cut`, plus every
- * replacement candidate tried for classic-bob/classic-lob/long-beach-waves/
- * curly-shag from the planner's pre-approved Wikimedia Commons CC0/Unsplash
- * list) was rejected — `buzz-cut`'s staged donor turned out on inspection
- * to be an official U.S. military portrait of a named, identifiable officer
- * (not a generic CC0 stock photo; a personality-rights problem independent
- * of copyright licensing) and was pulled before shipping; the other four
- * failed the face-occlusion gate or had an unreliable face-box detection.
- * See docs/ART.md for the full candidate-by-candidate record.
+ * Iteration 5R round 1 shipped only pixie-crop; round 2's bounded search
+ * (revised occlusion gate: inner-face < 0.15, whole-face < 0.5 backstop,
+ * face-box plausibility — see `src/overlays/extractCutout.ts`) added
+ * classic-lob, curly-shag, and long-beach-waves from new user-approved
+ * CC0 donors. `classic-bob` (no candidate passed the gate in either
+ * round) and `buzz-cut` (round 1's staged donor was an official U.S.
+ * military portrait of a named, identifiable officer — a
+ * personality-rights problem — and round 2 found no anonymous CC0
+ * replacement with visible buzz-cut-length hair) ship as catalog gaps
+ * ("Art coming soon"). See docs/ART.md for the full
+ * candidate-by-candidate record.
  */
 
 export interface OverlayAsset {
@@ -52,6 +53,24 @@ export const OVERLAY_REGISTRY: Readonly<Record<string, OverlayAsset>> = Object.f
     674,
     959,
     { x: 0.028189910979228485, y: 0.22940563086548488, w: 0.9436201780415431, h: 0.7507820646506778 }
+  ),
+  'classic-lob': asset(
+    require('../../assets/hairstyles/classic-lob/front.png'),
+    722,
+    641,
+    { x: 0.16620498614958448, y: 0.2896048654446178, w: 0.47645429362880887, h: 0.5514394013260531 }
+  ),
+  'curly-shag': asset(
+    require('../../assets/hairstyles/curly-shag/front.png'),
+    381,
+    433,
+    { x: 0.3685818569553806, y: 0.2678983833718245, w: 0.3915682414698163, h: 0.5080831408775982 }
+  ),
+  'long-beach-waves': asset(
+    require('../../assets/hairstyles/long-beach-waves/front.png'),
+    565,
+    506,
+    { x: 0.07610619469026549, y: 0.10458868577075099, w: 0.2973451327433628, h: 0.3843410326086957 }
   ),
 });
 

@@ -1,13 +1,16 @@
 import { OVERLAY_REGISTRY, getOverlayAsset, hasOverlayArt } from '../registry';
 
-// Iteration 5R (M6 remediation): only this 1 of the 6 MVP styles shipped a
-// real donor-hair cutout that passed the licensing bar (including a
-// personality-rights check - the donor staged for buzz-cut turned out to
-// be a named, identifiable person's official military portrait and was
-// pulled before shipping) and the face-occlusion gate (< 20% donor
-// face-box hair coverage) with a correctly-detected face anchor - see
-// docs/ART.md for the full candidate-by-candidate record.
-const EXPECTED_STYLE_IDS = ['pixie-crop'];
+// Iteration 5R (M6 remediation): 4 of the 6 MVP styles ship real
+// donor-hair cutouts that passed the licensing bar (including a
+// personality-rights check) and the face-occlusion gate - pixie-crop from
+// round 1, classic-lob / curly-shag / long-beach-waves from round 2's
+// bounded search under the revised gate (inner-face < 0.15, whole-face
+// < 0.5 backstop, face-box plausibility). classic-bob (no gate-passing
+// candidate in either round) and buzz-cut (round 1's donor was a named
+// officer's official military portrait, pulled; round 2 found no
+// anonymous CC0 replacement) ship as gaps - see docs/ART.md for the full
+// candidate-by-candidate record.
+const EXPECTED_STYLE_IDS = ['pixie-crop', 'classic-lob', 'curly-shag', 'long-beach-waves'];
 
 describe('OVERLAY_REGISTRY', () => {
   it('has exactly the Iteration 5R shipped-art style ids', () => {

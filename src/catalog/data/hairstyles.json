@@ -6,7 +6,12 @@
       "front": "assets/hairstyles/pixie-crop/front.png",
       "leftThreeQuarter": "assets/hairstyles/pixie-crop/left-three-quarter.webp",
       "rightThreeQuarter": "assets/hairstyles/pixie-crop/right-three-quarter.webp",
-      "headBox": { "x": 0.028189910979228485, "y": 0.22940563086548488, "w": 0.9436201780415431, "h": 0.7507820646506778 }
+      "headBox": {
+        "x": 0.028189910979228485,
+        "y": 0.22940563086548488,
+        "w": 0.9436201780415431,
+        "h": 0.7507820646506778
+      }
     },
     "lengths": [
       "short"
@@ -92,7 +97,13 @@
     "id": "classic-lob",
     "name": "Classic Lob",
     "assets": {
-      "front": "assets/hairstyles/classic-lob/front.webp"
+      "front": "assets/hairstyles/classic-lob/front.png",
+      "headBox": {
+        "x": 0.16620498614958448,
+        "y": 0.2896048654446178,
+        "w": 0.47645429362880887,
+        "h": 0.5514394013260531
+      }
     },
     "lengths": [
       "shoulder"
@@ -220,9 +231,15 @@
     "id": "long-beach-waves",
     "name": "Long Beach Waves",
     "assets": {
-      "front": "assets/hairstyles/long-beach-waves/front.webp",
+      "front": "assets/hairstyles/long-beach-waves/front.png",
       "leftThreeQuarter": "assets/hairstyles/long-beach-waves/left-three-quarter.webp",
-      "rightThreeQuarter": "assets/hairstyles/long-beach-waves/right-three-quarter.webp"
+      "rightThreeQuarter": "assets/hairstyles/long-beach-waves/right-three-quarter.webp",
+      "headBox": {
+        "x": 0.07610619469026549,
+        "y": 0.10458868577075099,
+        "w": 0.2973451327433628,
+        "h": 0.3843410326086957
+      }
     },
     "lengths": [
       "long"
@@ -284,9 +301,15 @@
     "id": "curly-shag",
     "name": "Curly Shag",
     "assets": {
-      "front": "assets/hairstyles/curly-shag/front.webp",
+      "front": "assets/hairstyles/curly-shag/front.png",
       "leftThreeQuarter": "assets/hairstyles/curly-shag/left-three-quarter.webp",
-      "rightThreeQuarter": "assets/hairstyles/curly-shag/right-three-quarter.webp"
+      "rightThreeQuarter": "assets/hairstyles/curly-shag/right-three-quarter.webp",
+      "headBox": {
+        "x": 0.3685818569553806,
+        "y": 0.2678983833718245,
+        "w": 0.3915682414698163,
+        "h": 0.5080831408775982
+      }
     },
     "lengths": [
       "medium"
