@@ -1,54 +1,59 @@
-# HANDOFF — Iteration 5 (Milestone M5: live camera recoloring)
+# HANDOFF — next iteration (pending user retest after 4R-6)
 
-**Author:** Fable 5 (planner) · **Status: BLOCKED — awaiting user manual checks (Iteration 4R closed the launch crash; E2E is green)**
+**Author:** Fable 5 (planner) · **Status: BLOCKED — awaiting user retest on preview build `1eac9823`**
 
 ## Gate
 
-Iterations 4R through 4R-5 are accepted: the app launches, insets are
-correct, the model loads in release builds, and **real hair segmentation
-runs on-device** (selfie_multiclass, hair = channel 1) — preview build
-`d5998560` is installed on the user's phone, 4/4 Maestro flows green.
+Iteration 4R-6 is accepted. Its verdict: **the segmentation pipeline was
+already correct** — all three planner hypotheses (input normalization,
+double-softmax, ArrayBuffer input) were empirically refuted by on-device
+tensor stats, and on the bundled CC0 portrait the recolor works visibly and
+dramatically (hair px 11.04%, teal-bold evidence in docs/evidence/4r6-*).
+The user's "no visible change" therefore means the model found ~no hair in
+the user's specific photos (control run: no-hair frame → fraction>0.5 =
+0.0000, max confidence 0.1049).
 
-Remaining gate before M5: the user's visual quality check on their own
-portrait photos (recolor tracks hair not face; edge quality; Mock↔TFLite
-toggle comparison; rough latency — CPU baseline is ~2–3s). Depending on
-findings, a short polish iteration (mask threshold/feathering, GPU delegate
-experiment) may precede M5.
+The user is retesting on preview build `1eac9823` (installed on their
+phone). The retest should distinguish:
 
-Notes for when this iteration starts: dev client `32841af6` is CURRENT
-(safe-area-context included; model swaps are asset-only). M5's native deps
-(vision-camera, worklets) require a new development build — build it
-alongside the first M5 EAS build (7 of 15 monthly builds remain). The
-standing privacy rule from PROGRESS.md applies to all M5 automation:
-camera-capture only, never the photo library.
+- **Library pick of an existing portrait** — if this still yields no
+  change, prime suspect is EXIF orientation: library photos carry
+  orientation metadata; if expo-image-manipulator's resize does not bake
+  it in, Skia's decode (which ignores EXIF) hands the model a sideways
+  face, which plausibly segments to nothing. NEXT ITERATION MUST VERIFY
+  the orientation of what actually reaches the model (log decoded
+  width/height + a downscaled debug dump) before touching anything else.
+- **Fresh in-app camera selfie** — camera-path capture may behave
+  differently from library picks (different EXIF handling). If camera
+  works but library doesn't, EXIF is all but confirmed.
+- **Hair characteristics** — if both paths fail on the user's hair but the
+  bundled portrait works, the model may struggle with this specific hair
+  (very short, gray, low contrast against background, hat, lighting).
+  Then the fix is expectation-setting UX, not tensors.
 
-The user's findings determine this iteration's shape:
+## Known UX gap to fix next iteration regardless of retest outcome
 
-- **Segmentation quality good, latency acceptable** → proceed to M5 as
-  outlined below (planner will expand this into a full work order).
-- **Quality poor (mask misses hair / bleeds onto skin)** → a remediation
-  iteration first: mask post-processing (feathering, morphological cleanup),
-  resolution handling, or input normalization fixes.
-- **TFLite fails to load on device (badge stuck on "mock")** → a remediation
-  iteration on the fast-tflite integration (delegate config, asset
-  resolution) before anything else.
+Release builds give NO feedback when the mask is empty — "model found no
+hair" is indistinguishable from "broken" (exactly what burned the user in
+4R-5/4R-6). Add a release-visible hint when the mask's fraction>0.5 is
+below ~0.5%: e.g. "No hair detected in this photo — try a closer, well-lit
+shot." Costs one JS-only preview build (6 of 15 monthly builds remain).
 
-## Provisional M5 outline (to be finalized after the gate clears)
+## After the gate clears: M5 (live camera) outline unchanged
 
-- `react-native-vision-camera` + worklets + Skia frame processor, per the
-  original architecture; requires one new EAS dev-client build (native deps
-  change — 14 of 15 monthly builds remain).
-- Segmentation at 10–20 FPS with the previous-frame mask fed into the
-  model's 4th input channel (the temporal-smoothing mechanism discovered in
-  Iteration 4); preview at 30 FPS with mask interpolation.
-- The recolor algorithm moves from CPU TS (`recolorPixel`) to an SkSL
-  runtime shader implementing the same settled model; the existing CPU
-  implementation stays as the reference for shader correctness tests.
-- Device-performance presets (segmentation resolution / frame-rate caps).
+- react-native-vision-camera + worklets + Skia frame processor; needs a
+  new dev-client build (native deps).
+- Note: selfie_multiclass has NO previous-mask input channel (that was the
+  old 4-channel hair_segmenter, now removed) — the M5 temporal-smoothing
+  design must use output-side mask smoothing (EMA between frames), not the
+  4th-input-channel mechanism from the original Iteration 4 notes.
+- Recolor moves to an SkSL shader; CPU implementation stays as reference.
 
 ## Standing constraints (unchanged)
 
-- Loop protocol per `docs/PROGRESS.md`; executor never edits HANDOFF /
-  PROGRESS / REMEDIATION / `.claude/`.
-- D1–D7 apply. No hand-written native code without a STOP-and-report.
-- No push, no analytics, no runtime network calls.
+- Loop protocol per docs/PROGRESS.md; executor never edits HANDOFF /
+  PROGRESS / REMEDIATION / .claude/.
+- Automation never opens/browses the photo library (bundled-portrait
+  diagnostic + flows-dev/04 exist for hair-bearing coverage).
+- D1–D7; no hand-written native code without STOP-and-report; no push, no
+  analytics, no runtime network calls.

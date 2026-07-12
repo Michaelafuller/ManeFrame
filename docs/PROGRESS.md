@@ -255,3 +255,34 @@ Sonnet must never edit `HANDOFF.md`, `REMEDIATION.md`, or this file.
   quality check on their own portraits.** Hair-quality tuning (mask
   feathering, threshold) may warrant a polish iteration after user
   feedback; then M5 (live camera).
+
+### Iteration 4R-6 — ACCEPTED (2026-07-11) — pipeline vindicated, coverage gap closed
+
+- User reported TFLite recolor was a visual no-op on their portraits
+  (badge fine, no error). Planner hypotheses: H1 input normalization,
+  H2 double-softmax, H3 ArrayBuffer input. **All three refuted** by
+  dev-only on-device instrumentation: input tensor sane [0,1]; output
+  per-pixel channel sums ≈ -2.3 (raw logits confirmed, client softmax
+  correct); on the new bundled CC0 portrait the mask's fraction>0.5 =
+  0.1104 and the teal-bold recolor is visibly excellent (evidence
+  4r6-portrait-before/after). No-hair control frame → 0.0000. Root cause
+  of the user's symptom: the model finds no hair in the user's specific
+  photos — cause TBD on retest (EXIF orientation of library picks is the
+  planner's prime suspect; see HANDOFF).
+- Structural fix for the acceptance hole that let this ship: bundled
+  public-domain test portrait (assets/test/portrait.jpg, source/license
+  in E2E.md) + __DEV__-only "Load bundled test portrait" button +
+  on-screen "hair px: N%" stat + flows-dev/04-portrait-recolor.yaml
+  (passed on dev client). Camera-only privacy rule preserved.
+- One real bug fixed (a28163f): dev-only hair-fraction stat loop ran in
+  release builds too; now __DEV__-guarded.
+- Acceptance: preview build `1eac9823` (9 of 15 monthly builds) installed
+  on user's phone; 4/4 flows/ green on it; 137/137 unit tests; tsc and
+  eslint clean. Commits e86fc93…ef47779.
+- **Process note (planner):** the first executor session was lost mid-run
+  (transcript casualty of the disk-full incident) after ~530k tokens; a
+  continuation agent reconstructed state from git and finished. All work
+  survived because the executor committed incrementally — keep doing that.
+- Gate: user retest on 1eac9823 (library pick vs fresh camera selfie —
+  the comparison discriminates the EXIF hypothesis). Next iteration adds
+  a release-visible "no hair detected" hint regardless of outcome.
